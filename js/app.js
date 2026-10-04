@@ -5,7 +5,7 @@ const { TIER, WEEKS, fmtW, normKey } = E;
 /* =================================================================
    ДАННЫЕ
    ================================================================= */
-const APP_VERSION = '2026-10-04 · 14';
+const APP_VERSION = '2026-10-04 · 16';
 const LS_KEY = 'gymlog.v3', LS_OLD = 'gymlog.v2', CLOUD_KEY = 'gymlog.cloud.v1';
 let uidN = 1;
 const uid = () => 'id' + Date.now().toString(36) + (uidN++).toString(36);
@@ -506,13 +506,13 @@ function render() {
   $('segbar').innerHTML = v.seg || '';
   $('app').innerHTML = v.body;
   renderHeader();
-  renderDock();
   if (t === 'progress' && (S.ui.progTab || 'charts') === 'charts') drawChart();
   if (t === 'food' && S.ui.foodTab === 'weight') drawWeightChart();
 }
 function renderHeader() {
   const c = S.cycle;
-  $('hdTitle').innerHTML = `Мезоцикл ${c.meso} · ${c.week === 0 ? 'Подбор 1ПМ' : c.week === 4 ? 'Разгрузка' : 'Неделя ' + c.week + ' · ' + WEEKS[c.week].name} ${ICON.chev}`;
+  if (S.active) $('hdTitle').innerHTML = esc(S.active.dayName);
+  else $('hdTitle').innerHTML = `Мезоцикл ${c.meso} · ${c.week === 0 ? 'Подбор 1ПМ' : c.week === 4 ? 'Разгрузка' : 'Неделя ' + c.week + ' · ' + WEEKS[c.week].name} ${ICON.chev}`;
   if (S.active) $('hdSub').innerHTML = `${ICON.clock}<span id="elapsed">Тренировка идёт · ${elapsed()}</span>`;
   else {
     const n = days().length, d = S.cycle.done.filter(id => days().some(x => x.id === id)).length, st = weekStreak();
@@ -625,7 +625,7 @@ function startWorkout(dayId) {
 function vActive() {
   const a = S.active;
   const tot = a.entries.reduce((s, e) => s + e.plan.sets, 0), dn = a.entries.reduce((s, e) => s + Math.min(e.sets.length, e.plan.sets), 0);
-  let h = `<div class="pad" style="padding-top:8px"><div class="row" style="margin-bottom:8px"><span class="grow"><h2 class="mid">${esc(a.dayName)}</h2><span class="muted num" style="font-size:13px">${dn} из ${tot} подходов</span></span>
+  let h = `<div class="pad" style="padding-top:8px"><div class="row" style="margin-bottom:8px"><span class="grow muted num" style="font-size:14px">${dn} из ${tot} подходов</span>
     <button class="pill sm dark" data-act="finish">Завершить</button></div>
     <div class="prog" style="margin-bottom:12px"><i style="width:${tot ? dn / tot * 100 : 0}%"></i></div>`;
   h += cardioHTML();
@@ -667,34 +667,28 @@ function exCoupon(en, ei, open) {
       ${s.pr ? '<span class="tagRed">рекорд</span>' : ''}<span class="dot ${s.tier}"></span><button class="x" data-act="delSet" data-a="${ei}" data-b="${i}" aria-label="Удалить подход">✕</button></div>`;
   });
   if (calib && en.calibDone) b += `<div class="doneRow"><span>${en.calibE1RM ? 'Сила зафиксирована: 1ПМ ≈ ' + fmtW(Math.round(en.calibE1RM)) + ' кг' : 'Зафиксировано'}</span></div>`;
-  if (!full && !calib) {
-    b += hintHTML(en);
+  if (!full) {
+    const tgt = E.targetTier(p, done);
+    let reps;
+    if (en.repMax - en.repMin <= 10) {
+      const lo = Math.max(1, en.repMin - 3), hi = en.repMax + 3;
+      reps = '<div class="repChips">';
+      for (let r = lo; r <= hi; r++) reps += `<button class="${r === d.r ? 'on' : r >= en.repMin && r <= en.repMax ? 'in' : ''}" data-act="setReps" data-a="${ei}" data-b="${r}">${r}</button>`;
+      reps += '</div>';
+    } else reps = stepperHTML(ei, 'r', d.r);
+    b += `<div class="inPanel">
+      <div class="inTitle">${calib ? 'Попытка ' + (done + 1) + ' · дойди до:' : 'Подход ' + (done + 1) + ' из ' + p.sets + ' · цель:'} <span class="dot ${tgt}"></span><span class="${tgt === 'r' ? 'fail' : ''}">${tgt === 'r' ? 'до отказа' : TIER[tgt].title.toLowerCase()}</span></div>
+      ${en.bw ? '' : '<div class="stpLbl">Вес, кг</div>' + stepperHTML(ei, 'w', d.w) + '<div style="height:10px"></div>'}
+      <div class="stpLbl">${en.bw && /\(сек\)/.test(en.name) ? 'Секунды' : 'Повторы'}</div>${reps}
+      <div class="rir">${['g', 'y', 'r'].map(k => `<button class="${k}${k === tgt ? ' tgt' : ''}${k === d.tier ? ' sel' : ''}" data-act="pickTier" data-a="${ei}" data-b="${k}"><b>${TIER[k].title}</b><span>${TIER[k].sub}</span></button>`).join('')}</div>
+      <button class="btn" style="margin-top:10px" data-act="logSet" data-a="${ei}" ${d.tier ? '' : 'disabled'}>${d.tier
+        ? `Записать: ${en.bw ? '' : fmtW(d.w) + ' кг × '}${d.r} · ${TIER[d.tier].title.toLowerCase()}`
+        : 'Выбери, как прошёл подход'}</button>
+      ${calib ? '' : hintHTML(en)}</div>`;
   } else if (!calib) {
     b += `<div class="doneRow"><span>Готово ✓</span><button class="pill sm" data-act="extraSet" data-a="${ei}">Ещё подход ${ICON.plus}</button></div>`;
   }
   return `<div class="coupon" id="ex${ei}" style="--cc:${pastel(ei)}">${head}${b}</div>`;
-}
-// закреплённая панель ввода подхода над меню: не уезжает при прокрутке списка
-function dockHTML(en, ei) {
-  const p = en.plan, done = en.sets.length, d = en.draft, calib = p.mode === 'calib', tgt = E.targetTier(p, done);
-  const step = (k, v, unit) => `<div class="dStep"><button data-act="bump" data-a="${ei}" data-b="${k}" data-c="-1" aria-label="Меньше">−</button>
-    <label><input inputmode="decimal" value="${k === 'w' ? fmtW(v || 0) : v}" data-chg="draft" data-a="${ei}" data-b="${k}"><span>${unit}</span></label>
-    <button data-act="bump" data-a="${ei}" data-b="${k}" data-c="1" aria-label="Больше">+</button></div>`;
-  return `<div class="dockHead"><span class="grow"><b>${esc(en.name)}</b> · ${calib ? 'попытка ' + (done + 1) : 'подход ' + (done + 1) + ' из ' + p.sets}</span>
-      <span class="dot ${tgt}"></span><span class="${tgt === 'r' ? 'fail' : ''}">${tgt === 'r' ? 'до отказа' : TIER[tgt].title.toLowerCase()}</span></div>
-    <div class="dockRow">${en.bw ? '' : step('w', d.w, 'кг')}${step('r', d.r, /\(сек\)/.test(en.name) ? 'сек' : 'повт')}</div>
-    <div class="rir dockRir">${['g', 'y', 'r'].map(k => `<button class="${k}${k === tgt ? ' tgt' : ''}${k === d.tier ? ' sel' : ''}" data-act="pickTier" data-a="${ei}" data-b="${k}"><b>${TIER[k].title}</b></button>`).join('')}</div>
-    <button class="btn dockBtn" data-act="logSet" data-a="${ei}" ${d.tier ? '' : 'disabled'}>${d.tier
-      ? `Записать: ${en.bw ? '' : fmtW(d.w) + ' кг × '}${d.r} · ${TIER[d.tier].title.toLowerCase()}` : 'Выбери, как прошёл подход'}</button>`;
-}
-function renderDock() {
-  const a = S.active, dock = $('dock');
-  const en = a && S.ui.tab === 'home' && a.open >= 0 ? a.entries[a.open] : null;
-  const show = !!(en && en.sets.length < en.plan.sets);
-  dock.innerHTML = show ? dockHTML(en, a.open) : '';
-  dock.classList.toggle('show', show);
-  document.body.classList.toggle('docked', show);
-  document.documentElement.style.setProperty('--dockH', (show ? dock.offsetHeight : 0) + 'px');
 }
 function warmupHTML(en, ei) {
   const w = en.draft.w || en.plan.w;
@@ -1325,7 +1319,7 @@ function addFood(name, kcal, p) {
 
 const A = {
   tab: d => setTab(d.a),
-  openCycle: () => openCycle(),
+  openCycle: () => { if (!S.active) openCycle(); },
   closeSheet: () => closeSheet(),
   confirmYes: () => { const cb = confirmCb; confirmCb = null; closeSheet(); if (cb) cb(); },
   promptOk: () => { const v = ($('promptIn') || {}).value || ''; const cb = promptCb; promptCb = null; closeSheet(); if (cb) cb(v); },

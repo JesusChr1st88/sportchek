@@ -1,7 +1,7 @@
 // Офлайн для зала без связи. Сеть первой и мимо HTTP-кэша браузера (cache: 'no-cache' —
 // сверка с сервером по ETag), иначе GitHub Pages отдаёт старую копию до 10 минут.
 // Кэш service worker — только запасной вариант без сети.
-const CACHE = 'progressia-v14';
+const CACHE = 'progressia-v15';
 const SHELL = ['./', 'index.html', 'css/app.css', 'js/app.js', 'js/engine.js', 'js/library.js', 'manifest.webmanifest', 'icon.svg'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))));
