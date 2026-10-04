@@ -5,6 +5,7 @@ const { TIER, WEEKS, fmtW, normKey } = E;
 /* =================================================================
    ДАННЫЕ
    ================================================================= */
+const APP_VERSION = '2026-10-04 · 13';
 const LS_KEY = 'gymlog.v3', LS_OLD = 'gymlog.v2', CLOUD_KEY = 'gymlog.cloud.v1';
 let uidN = 1;
 const uid = () => 'id' + Date.now().toString(36) + (uidN++).toString(36);
@@ -1204,7 +1205,8 @@ function vData() {
     <div class="card"><h2 class="mid" >Резервная копия</h2>
       <button class="btn ghost" style="margin-top:12px" data-act="export">Экспорт в файл</button>
       <label class="btn ghost" style="margin-top:10px">Импорт из файла<input type="file" accept=".json" data-chg="import" style="display:none"></label>
-      <button class="btn danger" style="margin-top:10px" data-act="resetAll">Сбросить всё</button></div></div>`;
+      <button class="btn danger" style="margin-top:10px" data-act="resetAll">Сбросить всё</button></div>
+    <p class="muted" style="text-align:center;font-size:12px;margin:4px 0 12px">Версия ${APP_VERSION}</p></div>`;
 }
 function vHow() {
   const s = (t, body, cc) => `<div class="coupon" style="--cc:${cc}"><div class="cTitle">${t}</div><div class="perf"><i></i><i></i></div><div class="prose">${body}</div></div>`;
@@ -1542,5 +1544,14 @@ if (S.ui.axialLog) {
     <button class="btn" data-act="closeSheet">Понятно</button>`);
 }
 cloudSync();
-if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => { });
+// новая версия на сервере → новый service worker берёт управление → одна перезагрузка
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded && !S.active) { reloaded = true; location.reload(); } });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+    reg.update();
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update(); });
+  }).catch(() => { });
+}
 window.__S = () => S; // для отладки из консоли
