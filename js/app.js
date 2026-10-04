@@ -540,8 +540,10 @@ function exCoupon(en, ei, open) {
       <div class="inTitle">Подход ${done + 1} из ${p.sets} · цель: <span class="dot ${tgt}"></span><span class="${tgt === 'r' ? 'fail' : ''}">${tgt === 'r' ? 'до отказа' : TIER[tgt].title.toLowerCase()}</span></div>
       ${en.bw ? '' : '<div class="stpLbl">Вес, кг</div>' + stepperHTML(ei, 'w', d.w) + '<div style="height:10px"></div>'}
       <div class="stpLbl">${en.bw && /\(сек\)/.test(en.name) ? 'Секунды' : 'Повторы'}</div>${reps}
-      <div class="rir">${['g', 'y', 'r'].map(k => `<button class="${k}${k === tgt ? ' tgt' : ''}" data-act="logSet" data-a="${ei}" data-b="${k}"><b>${TIER[k].title}</b><span>${TIER[k].sub}</span></button>`).join('')}</div>
-      <div class="rirHelp">Нажми, как прошёл подход, — он сразу запишется</div>
+      <div class="rir">${['g', 'y', 'r'].map(k => `<button class="${k}${k === tgt ? ' tgt' : ''}${k === d.tier ? ' sel' : ''}" data-act="pickTier" data-a="${ei}" data-b="${k}"><b>${TIER[k].title}</b><span>${TIER[k].sub}</span></button>`).join('')}</div>
+      <button class="btn" style="margin-top:10px" data-act="logSet" data-a="${ei}" ${d.tier ? '' : 'disabled'}>${d.tier
+        ? `Записать: ${en.bw ? '' : fmtW(d.w) + ' кг × '}${d.r} · ${TIER[d.tier].title.toLowerCase()}`
+        : 'Выбери, как прошёл подход'}</button>
       ${hintHTML(en)}</div>`;
   } else {
     b += `<div class="doneRow"><span>Готово ✓</span><button class="pill sm" data-act="extraSet" data-a="${ei}">Ещё подход ${ICON.plus}</button></div>`;
@@ -571,8 +573,9 @@ function hintHTML(en) {
   if (!h) return '';
   return `<div class="hint">После подхода ${en.sets.length}: <b>${fmtW(h.w)} кг</b> — ${h.note}</div>`;
 }
-function logSet(ei, tier) {
-  const en = S.active.entries[ei], d = en.draft;
+function logSet(ei) {
+  const en = S.active.entries[ei], d = en.draft, tier = d.tier;
+  if (!tier) { toast('Выбери, как прошёл подход'); return; }
   if (!(d.r > 0)) { toast('Укажи количество повторов'); return; }
   if (!en.bw && !(d.w > 0)) { toast('Укажи вес'); return; }
   const s = { w: en.bw ? 0 : d.w, r: d.r, tier };
@@ -585,6 +588,7 @@ function logSet(ei, tier) {
   en.sets.push(s);
   const h = E.nextSetHint(en, s, en.sets.length - 1);
   if (h) d.w = h.w;
+  d.tier = null;
   let moved = false;
   if (en.sets.length >= en.plan.sets) {
     const nx = S.active.entries.findIndex((e, i) => i > ei && e.sets.length < e.plan.sets);
@@ -596,7 +600,7 @@ function logSet(ei, tier) {
   toast((s.pr ? '🏆 Рекорд! ' : '') + `${en.bw ? '' : fmtW(s.w) + '×'}${s.r} · ${TIER[tier].title.toLowerCase()}`, () => {
     const e2 = S.active && S.active.entries[ei];
     if (!e2) return;
-    e2.sets.pop(); e2.draft.w = s.w; e2.draft.r = s.r; S.active.open = ei; restStop(); saveLocal(); render();
+    e2.sets.pop(); e2.draft.w = s.w; e2.draft.r = s.r; e2.draft.tier = s.tier; S.active.open = ei; restStop(); saveLocal(); render();
   });
   restStart(restOf(tier), tier);
 }
@@ -1126,7 +1130,8 @@ const A = {
     const en = S.active.entries[+d.a], k = d.b, step = k === 'w' ? (en.step || 1) : (en.repMax - en.repMin > 10 ? 5 : 1);
     en.draft[k] = Math.max(0, Math.round(((en.draft[k] || 0) + (+d.c) * step) * 100) / 100); rerender();
   },
-  logSet: d => logSet(+d.a, d.b),
+  logSet: d => logSet(+d.a),
+  pickTier: d => { const dr = S.active.entries[+d.a].draft; dr.tier = dr.tier === d.b ? null : d.b; rerender(); },
   delSet: d => { S.active.entries[+d.a].sets.splice(+d.b, 1); rerender(); },
   extraSet: d => { const en = S.active.entries[+d.a]; en.plan.sets++; en.plan.tiers = [...(en.plan.tiers || []), (en.plan.tiers || ['g']).slice(-1)[0] === 'r' ? 'y' : (en.plan.tiers || ['g']).slice(-1)[0]]; S.active.open = +d.a; rerender(); },
   finish: () => finishWorkout(),

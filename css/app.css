@@ -294,3 +294,9 @@ nav button.on svg{stroke-width:2.2}
 .warmChips{display:flex;flex-wrap:wrap;gap:6px}
 .warmChip{height:36px;padding:0 12px;border-radius:10px;background:var(--field);font-size:14px;font-variant-numeric:tabular-nums;color:var(--ink2)}
 .warmChip.on{background:var(--pill);color:var(--muted);text-decoration:line-through}
+
+/* выбор оценки подхода: выбранная кнопка заливается цветом зоны, запись — отдельной кнопкой */
+.rir button.sel{color:#fff;box-shadow:none}
+.rir button.sel span{color:rgba(255,255,255,.85)}
+.rir button.sel b::before{background:#fff!important}
+.rir button.sel.g{background:var(--tg)} .rir button.sel.y{background:var(--ty)} .rir button.sel.r{background:var(--tr)}
