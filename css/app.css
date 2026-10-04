@@ -322,3 +322,4 @@ nav button.on svg{stroke-width:2.2}
 .groupsBox summary::-webkit-details-marker{display:none}
 .groupsBox{list-style:none}
 .pArt:empty{display:none}
+.doneSep{font-size:13px;font-weight:600;color:var(--muted);margin:16px 2px 8px}

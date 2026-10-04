@@ -623,12 +623,21 @@ function startWorkout(dayId) {
 function vActive() {
   const a = S.active;
   const tot = a.entries.reduce((s, e) => s + e.plan.sets, 0), dn = a.entries.reduce((s, e) => s + Math.min(e.sets.length, e.plan.sets), 0);
-  let h = `<div class="pad" style="padding-top:8px"><div class="row" style="margin-bottom:8px"><h2 class="mid grow">${esc(a.dayName)}</h2><span class="muted num" style="font-size:14px">${dn}/${tot}</span></div>
+  let h = `<div class="pad" style="padding-top:8px"><div class="row" style="margin-bottom:8px"><span class="grow"><h2 class="mid">${esc(a.dayName)}</h2><span class="muted num" style="font-size:13px">${dn} из ${tot} подходов</span></span>
+    <button class="pill sm dark" data-act="finish">Завершить</button></div>
     <div class="prog" style="margin-bottom:12px"><i style="width:${tot ? dn / tot * 100 : 0}%"></i></div>`;
   h += cardioHTML();
-  a.entries.forEach((en, ei) => { h += exCoupon(en, ei, ei === a.open); });
-  h += `<button class="btn" data-act="finish">Завершить и зафиксировать</button>
-    <button class="btn ghost" data-act="cancelWorkout">Отменить без сохранения</button></div>`;
+  // невыполненные — сверху в своём порядке, выполненные — вниз под подписью «Сделано»
+  const isFull = e => e.sets.length >= e.plan.sets;
+  const order = a.entries.map((e, i) => i).sort((x, y) => (isFull(a.entries[x]) - isFull(a.entries[y])) || x - y);
+  let shownDone = false;
+  order.forEach(ei => {
+    const en = a.entries[ei];
+    if (isFull(en) && !shownDone) { shownDone = true; h += '<div class="doneSep">Сделано</div>'; }
+    h += exCoupon(en, ei, ei === a.open);
+  });
+  h += `<button class="btn" style="margin-top:6px" data-act="finish">Завершить и зафиксировать</button>
+    <button class="btn danger" data-act="cancelWorkout">Отменить без сохранения</button></div>`;
   return h;
 }
 function exCoupon(en, ei, open) {
