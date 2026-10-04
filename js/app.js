@@ -18,21 +18,22 @@ function mkEx(name, sets, repMin, repMax, step, rest, seed, flags = '', mrv) {
   return {
     id: uid(), key: normKey(name), name, sets, mrv: mrv || (flags.includes('h') ? sets + 1 : sets + 2),
     repMin, repMax, step, rest, seedE1RM: seed || null,
-    bw: flags.includes('w'), heavy: flags.includes('h'), bar: flags.includes('b')
+    bw: flags.includes('w'), heavy: flags.includes('h'), bar: flags.includes('b'),
+    equip: flags.includes('w') ? 'bw' : flags.includes('b') ? 'barbell' : flags.includes('d') ? 'dumbbell' : flags.includes('p') ? 'plate' : flags.includes('m') ? 'stack' : undefined
   };
 }
 // Замены для упражнений с осевой нагрузкой: [название, подходы, повт. от, до, шаг, отдых, 1ПМ, флаги]
 const SAFE = {
-  legPress: ['Жим платформы ногами', 3, 8, 12, 5, 150, 202],
-  legExt: ['Разгибания ног в тренажёре', 3, 10, 15, 2.5, 75],
-  legCurl: ['Сгибания ног', 3, 10, 12, 3, 75, 50],
+  legPress: ['Жим платформы ногами', 3, 8, 12, 5, 150, 202, 'p'],
+  legExt: ['Разгибания ног в тренажёре', 3, 10, 15, 2.5, 75, null, 'm'],
+  legCurl: ['Сгибания ног', 3, 10, 12, 2.5, 75, 50, 'm'],
   hipThrust: ['Ягодичный мост со штангой', 3, 8, 12, 2.5, 150, null, 'b'],
-  chestRow: ['Тяга с упором в грудь', 3, 8, 12, 2.5, 120],
-  dbRow: ['Тяга гантели с упором в скамью', 3, 8, 12, 2, 90],
-  pullover: ['Пуловер на блоке', 3, 10, 15, 2.5, 75],
-  inclinePress: ['Жим гантелей на наклонной 45°', 3, 8, 12, 2, 120],
-  rearDelt: ['Разведения на заднюю дельту', 3, 12, 15, 2.5, 75],
-  calfSeated: ['Подъёмы на носки сидя', 3, 12, 15, 5, 60]
+  chestRow: ['Тяга с упором в грудь', 3, 8, 12, 2.5, 120, null, 'm'],
+  dbRow: ['Тяга гантели с упором в скамью', 3, 8, 12, 2, 90, null, 'd'],
+  pullover: ['Пуловер на блоке', 3, 10, 15, 2.5, 75, null, 'm'],
+  inclinePress: ['Жим гантелей на наклонной 45°', 3, 8, 12, 2, 120, null, 'd'],
+  rearDelt: ['Разведения на заднюю дельту', 3, 12, 15, 2.5, 75, null, 'm'],
+  calfSeated: ['Подъёмы на носки сидя', 3, 12, 15, 5, 60, null, 'p']
 };
 const S_ = k => mkEx(...SAFE[k]);
 // что на что менять (первый вариант, которого ещё нет в этом дне)
@@ -51,38 +52,38 @@ const TEMPLATES = {
     { id: uid(), name: 'Фулбоди 1', exercises: [
       S_('legPress'),
       mkEx('Жим штанги лёжа', 3, 5, 8, 2.5, 180, 94, 'hb'),
-      mkEx('Тяга вертикального блока', 3, 8, 10, 2.5, 120, 68),
-      mkEx('Махи гантелями в стороны', 3, 12, 15, 1, 75, 11),
-      mkEx('Разгибания рук на блоке', 3, 10, 12, 2.5, 75, 38),
+      mkEx('Тяга вертикального блока', 3, 8, 10, 2.5, 120, 68, 'm'),
+      mkEx('Махи гантелями в стороны', 3, 12, 15, 1, 75, 11, 'd'),
+      mkEx('Разгибания рук на блоке', 3, 10, 12, 2.5, 75, 38, 'm'),
       mkEx('Скручивания', 3, 12, 20, 0, 60, null, 'w')] },
     { id: uid(), name: 'Фулбоди 2', exercises: [
       S_('hipThrust'), S_('inclinePress'),
-      mkEx('Тяга горизонтального блока', 3, 8, 12, 2.5, 120, 60),
+      mkEx('Тяга горизонтального блока', 3, 8, 12, 2.5, 120, 60, 'm'),
       S_('legExt'),
       mkEx('Подъём штанги на бицепс', 3, 8, 12, 2.5, 75, 28, 'b'),
       S_('calfSeated')] },
     { id: uid(), name: 'Фулбоди 3', exercises: [
       S_('legPress'),
-      mkEx('Жим гантелей лёжа 30°', 3, 8, 12, 2, 150, 72),
+      mkEx('Жим гантелей лёжа 30°', 3, 8, 12, 2, 150, 72, 'd'),
       S_('chestRow'), S_('legCurl'),
-      mkEx('Молот на бицепс', 3, 10, 12, 2, 75, 20),
+      mkEx('Молот на бицепс', 3, 10, 12, 2, 75, 20, 'd'),
       mkEx('Планка (сек)', 3, 20, 60, 0, 60, null, 'w')] }
   ],
   split: () => [
     { id: uid(), name: 'Грудь + трицепс + плечи', exercises: [
       mkEx('Жим штанги лёжа', 3, 5, 8, 2.5, 180, 94, 'hb'),
-      mkEx('Жим гантелей лёжа 30°', 3, 8, 12, 2, 150, 72),
+      mkEx('Жим гантелей лёжа 30°', 3, 8, 12, 2, 150, 72, 'd'),
       S_('inclinePress'),
-      mkEx('Махи гантелями в стороны', 3, 12, 15, 1, 75, 11),
-      mkEx('Разгибания рук на блоке', 3, 10, 12, 2.5, 75, 38),
-      mkEx('Французский жим', 3, 10, 12, 2, 75, 25)] },
+      mkEx('Махи гантелями в стороны', 3, 12, 15, 1, 75, 11, 'd'),
+      mkEx('Разгибания рук на блоке', 3, 10, 12, 2.5, 75, 38, 'm'),
+      mkEx('Французский жим', 3, 10, 12, 2, 75, 25, 'd')] },
     { id: uid(), name: 'Спина + бицепс', exercises: [
-      mkEx('Тяга вертикального блока', 3, 8, 10, 2.5, 120, 68),
+      mkEx('Тяга вертикального блока', 3, 8, 10, 2.5, 120, 68, 'm'),
       S_('chestRow'),
-      mkEx('Тяга горизонтального блока', 3, 8, 12, 2.5, 120, 60),
+      mkEx('Тяга горизонтального блока', 3, 8, 12, 2.5, 120, 60, 'm'),
       S_('dbRow'),
       mkEx('Подъём штанги на бицепс', 3, 8, 12, 2.5, 75, 28, 'b'),
-      mkEx('Молот на бицепс', 3, 10, 12, 2, 75, 20)] },
+      mkEx('Молот на бицепс', 3, 10, 12, 2, 75, 20, 'd')] },
     { id: uid(), name: 'Ноги + плечи', exercises: [
       S_('legPress'), S_('hipThrust'), S_('legExt'), S_('legCurl'), S_('rearDelt'), S_('calfSeated')] }
   ]
@@ -151,6 +152,7 @@ function migrateState(st) {
       if (ex.heavy === undefined) ex.heavy = HEAVY_NAMES.has(ex.name);
       if (ex.bar === undefined) ex.bar = !ex.bw && BAR_RE.test(ex.name);
       if (ex.bw && ex.bar) ex.bar = false;
+      if (!ex.equip) ex.equip = inferEquip(ex);
       if (!ex.mrv) ex.mrv = ex.sets + 2;
     });
   }));
@@ -314,6 +316,23 @@ const ICON = {
   clock: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.3 1.5"/></svg>',
   edit: '<svg width="18" height="18" viewBox="0 0 18 18"><path d="M3 15l.7-3.3L12 3.4a1.6 1.6 0 0 1 2.3 0l.3.3a1.6 1.6 0 0 1 0 2.3l-8.3 8.3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>'
 };
+/* ---------- снаряды и их визуализация ---------- */
+const EQUIP = {
+  barbell: 'Штанга', plate: 'Тренажёр с блинами', stack: 'Блок / стек', dumbbell: 'Гантели', bw: 'Свой вес'
+};
+// по названию — для упражнений из старых версий и новых, добавленных вручную
+function inferEquip(ex) {
+  if (ex.bw) return 'bw';
+  if (ex.bar) return 'barbell';
+  const k = normKey(ex.name);
+  if (/гантел|молот|французский/.test(k)) return 'dumbbell';
+  if (/платформ|жим ногами|носки сидя|хаммер|рычаж/.test(k)) return 'plate';
+  if (/штанг/.test(k)) return 'barbell';
+  return 'stack';
+}
+const equipOf = ex => ex.equip || inferEquip(ex);
+function setEquip(ex, eq) { ex.equip = eq; ex.bar = eq === 'barbell'; ex.bw = eq === 'bw'; }
+
 // блины IWF: [кг, цвет, высота, толщина]
 const PLATES = [[25, '#E4252B', 64, 11], [20, '#2F6FD6', 64, 10], [15, '#F2B705', 56, 9], [10, '#2E9F55', 48, 8], [5, '#F4F4F4', 36, 7], [2.5, '#2A2A2A', 28, 6], [1.25, '#BDBDBD', 22, 5]];
 function platesFor(total, bar) {
@@ -322,10 +341,14 @@ function platesFor(total, bar) {
   if (side > 0) PLATES.forEach(p => { while (side >= p[0] - 1e-6) { list.push(p); side -= p[0]; } });
   return { list, rest: Math.max(0, Math.round(side * 200) / 100) };
 }
-function barbellSVG(total, W = 220) {
-  const bar = S.settings.bar || 20, H = 72, cy = H / 2, { list } = platesFor(total, bar);
-  const iL = W / 2 - 32, iR = W / 2 + 32;
-  let g = `<rect x="3" y="${cy - 3}" width="${W - 6}" height="6" rx="3" fill="#A9A9A9"/>`;
+// гриф (sled=false) или каретка тренажёра (sled=true) с блинами по сторонам
+function loadedSVG(total, sled, W = 220) {
+  const bar = sled ? 0 : (S.settings.bar || 20), H = 72, cy = H / 2, { list } = platesFor(total, bar);
+  const half = sled ? 30 : 32, iL = W / 2 - half, iR = W / 2 + half;
+  let g = sled
+    ? `<rect x="${iL - 8}" y="${cy - 3}" width="${iR - iL + 16}" height="6" rx="3" fill="#A9A9A9"/><rect x="${W / 2 - 26}" y="${cy - 20}" width="52" height="40" rx="8" style="fill:var(--dim)"/><rect x="${W / 2 - 18}" y="${cy - 12}" width="36" height="24" rx="5" style="fill:var(--card)"/>`
+    : `<rect x="3" y="${cy - 3}" width="${W - 6}" height="6" rx="3" fill="#A9A9A9"/>`;
+  if (sled) g += `<rect x="12" y="${cy - 3}" width="${iL - 12}" height="6" rx="3" fill="#A9A9A9"/><rect x="${iR}" y="${cy - 3}" width="${W - 12 - iR}" height="6" rx="3" fill="#A9A9A9"/>`;
   g += `<rect x="${iL - 5}" y="${cy - 8}" width="5" height="16" rx="1.5" fill="#7B7B7B"/><rect x="${iR}" y="${cy - 8}" width="5" height="16" rx="1.5" fill="#7B7B7B"/>`;
   let xl = iL - 5, xr = iR + 5;
   list.forEach(([, col, h, wd]) => {
@@ -338,15 +361,55 @@ function barbellSVG(total, W = 220) {
   });
   return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true">${g}</svg>`;
 }
-function platesCaption(total) {
-  const bar = S.settings.bar || 20;
-  if (total < bar) return 'меньше грифа (' + fmtW(bar) + ' кг)';
+function platesCaption(total, sled) {
+  const bar = sled ? 0 : (S.settings.bar || 20);
+  if (!sled && total < bar) return 'меньше грифа (' + fmtW(bar) + ' кг)';
   const { list, rest } = platesFor(total, bar);
-  if (!list.length) return 'пустой гриф ' + fmtW(bar) + ' кг';
-  return 'на сторону: ' + list.map(p => fmtW(p[0])).join(' + ') + (rest ? ' (≈, не хватает ' + fmtW(rest * 2) + ' кг)' : '');
+  if (!list.length) return sled ? 'без блинов' : 'пустой гриф ' + fmtW(bar) + ' кг';
+  return (sled ? 'на каждую сторону: ' : 'на сторону: ') + list.map(p => fmtW(p[0])).join(' + ') + (rest ? ' (≈, не хватает ' + fmtW(rest * 2) + ' кг)' : '');
 }
-function artFor(ex, w) {
-  return ex.bar && !ex.bw && w ? barbellSVG(w, 220) : '';
+// стек тренажёра: плиты сверху вниз, штифт под последней поднимаемой
+function stackInfo(w) {
+  const pk = S.settings.stack || 5, n = Math.floor(w / pk + 1e-6), rem = Math.round((w - n * pk) * 100) / 100;
+  return { pk, n, rem };
+}
+function stackSVG(w) {
+  const { n, rem } = stackInfo(w), rows = Math.min(20, Math.max(10, n + 2)), rh = 6, gap = 2, W = 150, pw = 84, x0 = (W - pw) / 2;
+  const H = rows * (rh + gap) + 6;
+  let g = `<rect x="${W / 2 - 1.5}" y="0" width="3" height="${H}" rx="1.5" style="fill:var(--dim)"/>`;
+  for (let i = 0; i < rows; i++) {
+    const y = 3 + i * (rh + gap), on = i < n;
+    g += `<rect x="${x0}" y="${y}" width="${pw}" height="${rh}" rx="2" style="fill:${on ? 'var(--ink)' : 'var(--line)'}"/>`;
+  }
+  if (n > 0 && n <= rows) {
+    const y = 3 + (n - 1) * (rh + gap) + rh / 2;
+    g += `<rect x="${x0 + pw}" y="${y - 1.5}" width="20" height="3" rx="1.5" fill="#E5484D"/><circle cx="${x0 + pw + 22}" cy="${y}" r="4" fill="#E5484D"/>`;
+  }
+  if (rem) g += `<rect x="${x0 - 22}" y="3" width="16" height="${rh}" rx="2" fill="#E5484D"/>`;
+  return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true">${g}</svg>`;
+}
+// гантель: размер «блинов» растёт с весом
+function dumbbellSVG(w) {
+  const k = Math.min(1, (w || 0) / 40), hh = 36 + k * 22, hw = 14 + k * 8, W = 130, H = 64, cy = H / 2;
+  const L = 40, R = W - 40;
+  let g = `<rect x="${L}" y="${cy - 3}" width="${R - L}" height="6" rx="3" fill="#A9A9A9"/>`;
+  [[L - hw, 1], [R, 1]].forEach(([x]) => {
+    g += `<rect x="${x}" y="${cy - hh / 2}" width="${hw}" height="${hh}" rx="4" style="fill:var(--ink)"/>`;
+  });
+  g += `<rect x="${L - hw - 6}" y="${cy - hh / 2 + 5}" width="6" height="${hh - 10}" rx="2.5" style="fill:var(--ink2)"/><rect x="${R + hw}" y="${cy - hh / 2 + 5}" width="6" height="${hh - 10}" rx="2.5" style="fill:var(--ink2)"/>`;
+  return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true">${g}</svg>`;
+}
+const BW_SVG = '<svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true" fill="none" style="stroke:var(--ink)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="32" cy="12" r="6"/><path d="M32 20v20M18 26l14 4 14-4M24 58l8-18 8 18"/></svg>';
+// иллюстрация + подпись для любого снаряда
+function equipArt(ex, w, reps) {
+  const eq = equipOf(ex);
+  if (eq === 'bw') return { svg: BW_SVG, cap: 'свой вес' + (reps ? ' · ' + reps + ' ' + repWord(ex) : '') };
+  if (!w) return { svg: '', cap: '' };
+  if (eq === 'barbell') return { svg: loadedSVG(w, false), cap: platesCaption(w, false) };
+  if (eq === 'plate') return { svg: loadedSVG(w, true), cap: platesCaption(w, true) };
+  if (eq === 'dumbbell') return { svg: dumbbellSVG(w), cap: fmtW(w) + ' кг в каждой руке' };
+  const { pk, n, rem } = stackInfo(w);
+  return { svg: stackSVG(w), cap: `штифт на ${n}-й плите (по ${fmtW(pk)} кг)${rem ? ' + доп. блин ' + fmtW(rem) + ' кг' : ''}` };
 }
 
 /* =================================================================
@@ -364,7 +427,34 @@ const weekName = wk => wk === 4 ? 'Разгрузка' : 'Неделя ' + wk;
 const setsLine = en => en.sets.map(s => `${en.bw ? '' : fmtW(s.w) + '×'}${s.r} <span class="dot ${s.tier || 'g'}"></span>`).join('&nbsp; ');
 function findEx(key) { for (const d of days()) for (const ex of d.exercises) if (ex.key === key) return ex; return null; }
 function nextDayIndex() { const ds = days(); const i = ds.findIndex(d => !S.cycle.done.includes(d.id)); return i < 0 ? 0 : i; }
-function estMin(d) { return Math.round(d.exercises.reduce((a, ex) => a + E.phase(ex, S.cycle).sets * (restOf('y') + 40), 0) / 60); }
+const CARDIO_TYPES = ['Дорожка', 'Велотренажёр', 'Эллипс', 'Гребля', 'Степпер'];
+const cardioCfg = () => Object.assign({ on: true, type: 'Велотренажёр', min: 10 }, S.settings.cardio || {});
+// лёгкая аэробная зона перед силовой: 60–70% от макс. пульса (220 − возраст)
+function hrZone() {
+  const age = S.nutrition && S.nutrition.profile && S.nutrition.profile.age;
+  if (!age) return 'пульс ~60–70% от максимума, можно говорить';
+  const mx = 220 - age;
+  return `пульс ${Math.round(mx * 0.6)}–${Math.round(mx * 0.7)}, можно говорить`;
+}
+function cardioHTML() {
+  const c = S.active.cardio;
+  if (!c) return '';
+  if (c.done) return `<div class="coupon collapsed"><div class="exHead" data-act="cardioReopen"><div class="exName">Кардио-разминка</div><span class="cnt full">✓</span></div>
+    <div class="exMeta">${esc(c.type)} · ${c.min} мин</div></div>`;
+  return `<div class="coupon"><div class="exHead"><div class="exName">Кардио-разминка</div><button class="cnt" data-act="cardioSkip">пропустить</button></div>
+    <div class="exMeta">лёгкий темп · ${hrZone()}</div>
+    <div class="warmBox"><div class="eqPick">${CARDIO_TYPES.map(t => `<button class="chip${t === c.type ? ' on' : ''}" data-act="cardioType" data-a="${t}">${t}</button>`).join('')}</div></div>
+    <div class="stpLbl" style="margin-top:14px">Минут</div>
+    <div class="stepper"><button data-act="cardioMin" data-a="-1">−</button><input value="${c.min}" readonly><button data-act="cardioMin" data-a="1">+</button></div>
+    <div class="two" style="margin-top:10px"><button class="btn ghost" data-act="cardioTimer">Таймер ${c.min} мин</button><button class="btn" data-act="cardioDone">Готово</button></div></div>`;
+}
+// «цель: легко» / «цель: средне, последний — отказ» — вместо ряда цветных точек
+function goalText(tiers) {
+  if (!tiers || !tiers.length) return '';
+  const first = tiers[0], last = tiers[tiers.length - 1];
+  return '· цель: ' + TIER[first].title.toLowerCase() + (last !== first ? ', последний — ' + TIER[last].title.toLowerCase() : '');
+}
+function estMin(d) { return Math.round(d.exercises.reduce((a, ex) => a + E.phase(ex, S.cycle).sets * (restOf('y') + 40), 0) / 60) + (cardioCfg().on ? cardioCfg().min : 0); }
 function weekStreak() {
   if (!S.history.length) return 0;
   const wk = iso => { const d = new Date(iso); const dow = (d.getDay() + 6) % 7; d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - dow); return localKey(d); };
@@ -470,7 +560,7 @@ function vHome() {
       h += `<div class="prod" data-act="startDay" data-a="${nd.id}"><span class="prodTag">${tag}</span>
         <div class="prodName">${esc(ex.name)}</div>
         <div class="pill">${price}</div>
-        <div class="prodMeta">${r.sets} × ${ex.repMin}–${ex.repMax} ${r.tiers.map(t => `<span class="dot ${t}"></span>`).join('')}</div></div>`;
+        <div class="prodMeta">${r.sets} × ${ex.repMin}–${ex.repMax} ${goalText(r.tiers)}</div></div>`;
     });
     h += '</div>';
   }
@@ -487,10 +577,11 @@ function startWorkout(dayId) {
     entries: day.exercises.map(ex => {
       const r = rec(ex);
       return {
-        exId: ex.id, key: ex.key, name: ex.name, bw: ex.bw, bar: ex.bar, heavy: ex.heavy, step: ex.step, rest: ex.rest,
+        exId: ex.id, key: ex.key, name: ex.name, bw: ex.bw, bar: ex.bar, equip: equipOf(ex), heavy: ex.heavy, step: ex.step, rest: ex.rest,
         repMin: ex.repMin, repMax: ex.repMax, plan: r, sets: [], draft: { w: r.w || 0, r: r.reps || ex.repMin }
       };
-    })
+    }),
+    cardio: cardioCfg().on ? { type: cardioCfg().type, min: cardioCfg().min, done: false } : null
   };
   S.ui.tab = 'home'; saveLocal(); render(); window.scrollTo(0, 0);
 }
@@ -501,6 +592,7 @@ function vActive() {
     <h1 class="big" style="padding:6px 0 12px">${esc(a.dayName)}</h1>
     <div class="prog"><i style="width:${tot ? dn / tot * 100 : 0}%"></i></div>
     <div class="muted num" style="margin:8px 0 14px;font-size:14px">${dn} из ${tot} подходов</div>`;
+  h += cardioHTML();
   a.entries.forEach((en, ei) => { h += exCoupon(en, ei, ei === a.open); });
   h += `<button class="btn" data-act="finish">Завершить и зафиксировать</button>
     <button class="btn ghost" data-act="cancelWorkout">Отменить без сохранения</button></div>`;
@@ -508,7 +600,7 @@ function vActive() {
 }
 function exCoupon(en, ei, open) {
   const p = en.plan, done = en.sets.length, full = done >= p.sets;
-  const dots = (p.tiers || []).map(t => `<span class="dot ${t}"></span>`).join('');
+  const dots = goalText(p.tiers);
   const head = `<div class="exHead" data-act="toggleEx" data-a="${ei}"><div class="exName">${esc(en.name)}</div><span class="cnt num${full ? ' full' : ''}">${done}/${p.sets}</span></div>
     <div class="exMeta">${p.sets} × ${en.repMin}–${en.repMax} ${repWord(en)} ${dots}</div>`;
   if (!open) {
@@ -518,7 +610,8 @@ function exCoupon(en, ei, open) {
   const d = en.draft;
   const old = !en.bw && p.prevW != null && p.prevW !== p.w ? `<s>${fmtW(p.prevW)}</s>` : '';
   const price = en.bw ? `×${p.reps} ${repWord(en)}` : p.w != null ? `${fmtW(p.w)} кг <span class="pillSub">× ${p.reps}</span>` : 'подбери вес';
-  let b = `<div class="exArt">${artFor(en, d.w || p.w, p.reps)}${en.bar && !en.bw && d.w ? `<div class="plCap">${platesCaption(d.w)}</div>` : ''}</div>
+  const art = equipArt(en, d.w || p.w, d.r || p.reps);
+  let b = `<div class="exArt">${art.svg}${art.cap ? `<div class="plCap">${art.cap}</div>` : ''}</div>
     <div class="pill">${old} ${price}</div><div class="note">${esc(p.note || '')}</div>`;
   if (!done) b += warmupHTML(en, ei);
   b += '<div class="perf"><i></i><i></i></div>';
@@ -618,7 +711,8 @@ function finishWorkout() {
   const achBefore = unlockedNames(), prBefore = PR().best;
   const recd = {
     id: uid(), date: new Date().toISOString(), dayId: a.dayId, dayName: a.dayName,
-    durMin: Math.max(1, Math.round((Date.now() - a.startedAt) / 60000)), meso: a.meso, week: a.week, deload: a.week === 4, entries
+    durMin: Math.max(1, Math.round((Date.now() - a.startedAt) / 60000)), meso: a.meso, week: a.week, deload: a.week === 4, entries,
+    cardio: a.cardio && a.cardio.done ? { type: a.cardio.type, min: a.cardio.min } : null
   };
   S.history.push(recd);
   let closed = null;
@@ -653,6 +747,7 @@ function openReceipt(r, prBefore, closed, newAch) {
     <div class="perf"><i></i><i></i></div>
     <div class="card" style="margin:0">${rows}</div>
     <div class="perf"><i></i><i></i></div>
+    ${r.cardio ? `<p class="cText">Кардио: ${esc(r.cardio.type)}, ${r.cardio.min} мин</p>` : ''}
     <p class="cText">${cyc}</p>
     ${newAch.length ? `<p class="cText" style="margin-top:10px">🏆 Новое: <b>${newAch.map(esc).join(', ')}</b></p>` : ''}
   </div><button class="btn" data-act="closeSheet">Отлично</button>`);
@@ -672,9 +767,10 @@ function beep() {
   if (navigator.vibrate) try { navigator.vibrate([200, 100, 200]); } catch (e) { }
 }
 document.addEventListener('touchstart', () => { try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume(); } catch (e) { } }, { once: true });
-function restStart(sec, tier) {
-  restTotal = sec; restEnd = Date.now() + sec * 1000;
-  $('restL').textContent = tier ? 'после «' + TIER[tier].title.toLowerCase() + '»' : 'отдых';
+let restKind = 'rest';
+function restStart(sec, tier, kind) {
+  restTotal = sec; restEnd = Date.now() + sec * 1000; restKind = kind || 'rest';
+  $('restL').textContent = kind === 'cardio' ? 'кардио' : tier ? 'после «' + TIER[tier].title.toLowerCase() + '»' : 'отдых';
   $('restbar').classList.add('show'); document.body.classList.add('resting');
   clearInterval(restIv); restIv = setInterval(restTick, 250); restTick();
 }
@@ -683,7 +779,7 @@ function restTick() {
   $('restT').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
   $('restRing').style.strokeDasharray = RING_C.toFixed(1);
   $('restRing').style.strokeDashoffset = (RING_C * (1 - (restTotal ? left / (restTotal * 1000) : 0))).toFixed(1);
-  if (left <= 0) { restStop(); beep(); toast('⏱ Отдых окончен — следующий подход'); }
+  if (left <= 0) { restStop(); beep(); toast(restKind === 'cardio' ? '⏱ Кардио окончено — переходи к силовой' : '⏱ Отдых окончен — следующий подход'); }
 }
 function restStop() { clearInterval(restIv); $('restbar').classList.remove('show'); document.body.classList.remove('resting'); }
 
@@ -708,8 +804,8 @@ function vProgram() {
     const price = ex.bw ? `×${r.reps}` : r.w != null ? fmtW(r.w) + ' кг' : '—';
     h += `<button class="pcard" data-act="editEx" data-a="${sc}" data-b="${di}" data-c="${xi}">
       
-      <div class="prodName" style="margin:10px 0 6px">${esc(ex.name)}</div>
-      <div class="prodMeta" style="margin:0 0 10px">${ph.mev}→${ph.mrv} подх. · ${ex.repMin}–${ex.repMax}${ex.heavy ? ' · база' : ''}</div>
+      <div class="pArt">${equipArt(ex, r.w || (ex.bw ? 0 : 40), r.reps).svg}</div><div class="prodName" style="margin:10px 0 6px">${esc(ex.name)}</div>
+      <div class="prodMeta" style="margin:0 0 10px">${EQUIP[equipOf(ex)]} · ${ex.repMin}–${ex.repMax}${ex.heavy ? ' · база' : ''}</div>
       <span class="pill">${price}</span></button>`;
   });
   h += `<button class="pcard add" data-act="addEx" data-a="${sc}" data-b="${di}">${ICON.plus}Упражнение</button></div>
@@ -732,8 +828,7 @@ function openEditEx(sc, di, xi) {
     ${num('Шаг веса, кг', 'step', 0.5)}
     ${num('Стартовый 1ПМ, кг (необязательно)', 'seedE1RM', 2.5)}
     ${tog('Тяжёлое базовое', 'Растёт весом, не подходами; никогда не в отказ', 'heavy')}
-    ${tog('На штанге', 'Показывать раскладку блинов', 'bar')}
-    ${tog('Свой вес', 'Прогрессия по повторам, без кг', 'bw')}
+    <div class="field"><label>Снаряд</label><div class="eqPick">${Object.entries(EQUIP).map(([k, l]) => `<button class="chip${equipOf(ex) === k ? ' on' : ''}" data-act="exEquip" ${a} data-d="${k}">${l}</button>`).join('')}</div></div>
     <div class="two" style="margin:6px 0 10px"><button class="btn ghost" data-act="moveEx" ${a} data-d="-1">↑ Выше</button><button class="btn ghost" data-act="moveEx" ${a} data-d="1">↓ Ниже</button></div>
     <button class="btn danger" data-act="delEx" ${a}>Удалить упражнение</button>
     <button class="btn" data-act="closeSheet" style="margin-top:10px">Готово</button>`);
@@ -948,7 +1043,7 @@ function openWorkout(id) {
   const w = S.history.find(x => x.id === id); if (!w) return;
   const ton = w.entries.reduce((a, e) => a + tonnage(e), 0);
   openSheet(`<h3>${esc(w.dayName)}</h3><p class="muted" style="margin:-6px 0 12px">${new Date(w.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })} · мезоцикл ${w.meso || 1}, ${weekName(w.week || 1).toLowerCase()} · ${w.durMin} мин · ${Math.round(ton).toLocaleString('ru-RU')} кг</p>
-    <div class="card">${w.entries.map(en => `<div class="li"><div class="grow"><div class="liT">${esc(en.name)}</div><div class="liS num">${setsLine(en)}</div></div></div>`).join('')}</div>
+    <div class="card">${w.cardio ? `<div class="li"><div class="grow"><div class="liT">Кардио</div><div class="liS">${esc(w.cardio.type)} · ${w.cardio.min} мин</div></div></div>` : ''}${w.entries.map(en => `<div class="li"><div class="grow"><div class="liT">${esc(en.name)}</div><div class="liS num">${setsLine(en)}</div></div></div>`).join('')}</div>
     <button class="btn danger" data-act="delWorkout" data-a="${w.id}">Удалить запись</button><button class="btn ghost" data-act="closeSheet">Закрыть</button>`);
 }
 function vRecords() {
@@ -1012,11 +1107,17 @@ function vData() {
     <div class="field"><label>Ключ (минимум 4 символа)</label><input type="password" id="cfgPass" style="background:var(--pill)"></div>
     <button class="btn" data-act="login">Войти</button></div>`;
   return `<div style="margin-top:10px">${sync}
+    <div class="card"><h2 class="mid">Кардио перед силовой</h2>
+      <button class="toggleRow" style="background:var(--field);margin-top:10px" data-act="cardioOn"><span><span class="liT">Добавлять в каждую тренировку</span><span class="liS">лёгкий темп, разогрев перед весами</span></span><span class="switch${cardioCfg().on ? ' on' : ''}"></span></button>
+      <div class="row"><span class="grow">Длительность, мин</span><div class="stepper" style="width:170px"><button data-act="cardioDef" data-a="-1">−</button><input value="${cardioCfg().min}" readonly><button data-act="cardioDef" data-a="1">+</button></div></div>
+      <div style="height:12px"></div></div>
     <div class="card"><h2 class="mid">Отдых между подходами</h2>
       ${['g', 'y', 'r'].map(t => `<div class="row" style="margin-top:10px"><span class="grow row" style="gap:7px"><span class="dot ${t}"></span>После «${TIER[t].title.toLowerCase()}»</span>
         <div class="stepper" style="width:170px"><button data-act="restSet" data-a="${t}" data-b="-10">−</button><input value="${mmss(restOf(t))}" readonly><button data-act="restSet" data-a="${t}" data-b="10">+</button></div></div>`).join('')}
       <div style="height:12px"></div></div>
-    <div class="card"><h2 class="mid">Оборудование</h2><div class="row" style="margin-top:10px"><span class="grow">Вес грифа</span>
+    <div class="card"><h2 class="mid">Оборудование</h2><div class="row" style="margin-top:10px"><span class="grow">Плита в стеке тренажёра</span>
+      <div class="stepper" style="width:170px"><button data-act="stackBump" data-a="-0.5">−</button><input value="${fmtW(S.settings.stack || 5)}" readonly><button data-act="stackBump" data-a="0.5">+</button></div></div>
+      <div class="row" style="margin-top:10px"><span class="grow">Вес грифа</span>
       <div class="stepper" style="width:170px"><button data-act="barBump" data-a="-2.5">−</button><input value="${fmtW(S.settings.bar)}" readonly><button data-act="barBump" data-a="2.5">+</button></div></div></div>
     <div class="card"><h2 class="mid" >Резервная копия</h2>
       <button class="btn ghost" style="margin-top:12px" data-act="export">Экспорт в файл</button>
@@ -1118,6 +1219,14 @@ const A = {
   undo: () => { const u = toastUndo; toastUndo = null; $('toast').classList.remove('show'); if (u) u(); },
 
   startDay: d => startWorkout(d.a),
+  cardioType: d => { S.active.cardio.type = d.a; S.settings.cardio = Object.assign(cardioCfg(), { type: d.a }); save(); render(); },
+  cardioMin: d => { const c = S.active.cardio; c.min = Math.max(1, Math.min(60, c.min + (+d.a))); rerender(); },
+  cardioTimer: () => restStart(S.active.cardio.min * 60, null, 'cardio'),
+  cardioDone: () => { S.active.cardio.done = true; if (restKind === 'cardio') restStop(); rerender(); },
+  cardioSkip: () => { S.active.cardio = null; if (restKind === 'cardio') restStop(); rerender(); },
+  cardioReopen: () => { S.active.cardio.done = false; rerender(); },
+  cardioOn: () => { S.settings.cardio = Object.assign(cardioCfg(), { on: !cardioCfg().on }); save(); render(); },
+  cardioDef: d => { const c = cardioCfg(); c.min = Math.max(1, Math.min(60, c.min + (+d.a))); S.settings.cardio = c; save(); render(); },
   warmDone: d => {
     const en = S.active.entries[+d.a]; en.warmDone = en.warmDone || [];
     en.warmDone[+d.b] = !en.warmDone[+d.b];
@@ -1160,9 +1269,10 @@ const A = {
   addDay: d => { const ds = dsOf(d.a); ds.push({ id: uid(), name: 'День ' + (ds.length + 1), exercises: [] }); S.ui.progDay = ds.length - 1; save(); render(); },
   delDay: d => { const ds = dsOf(d.a), day = ds[+d.b]; confirmSheet(`Удалить «${day.name}»? История сохранится.`, () => { ds.splice(+d.b, 1); S.cycle.done = S.cycle.done.filter(x => x !== day.id); S.ui.progDay = 0; save(); render(); }, { title: 'Удалить день?', yes: 'Удалить', danger: true }); },
   renameDay: d => { const day = dsOf(d.a)[+d.b]; promptSheet('Название дня', day.name, v => { if (v.trim()) { day.name = v.trim(); save(); render(); } }); },
-  addEx: d => { const ex = mkEx('Новое упражнение', 3, 8, 12, 2.5, 120, null, ''); dsOf(d.a)[+d.b].exercises.push(ex); save(); render(); openEditEx(d.a, +d.b, dsOf(d.a)[+d.b].exercises.length - 1); },
+  addEx: d => { const ex = mkEx('Новое упражнение', 3, 8, 12, 2.5, 120, null, 'm'); dsOf(d.a)[+d.b].exercises.push(ex); save(); render(); openEditEx(d.a, +d.b, dsOf(d.a)[+d.b].exercises.length - 1); },
   editEx: d => openEditEx(d.a, +d.b, +d.c),
   exNum: d => { const ex = exOf(d); setExNum(ex, d.d, (ex[d.d] || 0) + (+d.e)); afterExEdit(d); },
+  exEquip: d => { setEquip(exOf(d), d.d); afterExEdit(d); },
   exToggle: d => {
     const ex = exOf(d); ex[d.d] = !ex[d.d];
     // «свой вес» и «на штанге» взаимоисключающие: у упражнения без кг нет раскладки блинов
@@ -1226,6 +1336,7 @@ const A = {
     r[d.a] = Math.max(20, Math.min(600, r[d.a] + (+d.b)));
     S.settings.rest = r; save(); render();
   },
+  stackBump: d => { S.settings.stack = Math.max(1, (S.settings.stack || 5) + (+d.a)); save(); render(); },
   barBump: d => { S.settings.bar = Math.max(0, (S.settings.bar || 20) + (+d.a)); save(); render(); },
   syncNow: () => cloudSync(),
   login: async () => {
