@@ -5,7 +5,7 @@ const { TIER, WEEKS, fmtW, normKey } = E;
 /* =================================================================
    ДАННЫЕ
    ================================================================= */
-const APP_VERSION = '2026-10-04 · 13';
+const APP_VERSION = '2026-10-04 · 14';
 const LS_KEY = 'gymlog.v3', LS_OLD = 'gymlog.v2', CLOUD_KEY = 'gymlog.cloud.v1';
 let uidN = 1;
 const uid = () => 'id' + Date.now().toString(36) + (uidN++).toString(36);
@@ -506,6 +506,7 @@ function render() {
   $('segbar').innerHTML = v.seg || '';
   $('app').innerHTML = v.body;
   renderHeader();
+  renderDock();
   if (t === 'progress' && (S.ui.progTab || 'charts') === 'charts') drawChart();
   if (t === 'food' && S.ui.foodTab === 'weight') drawWeightChart();
 }
@@ -630,7 +631,7 @@ function vActive() {
   h += cardioHTML();
   // невыполненные — сверху в своём порядке, выполненные — вниз под подписью «Сделано»
   const isFull = e => e.sets.length >= e.plan.sets;
-  const order = a.entries.map((e, i) => i).sort((x, y) => (isFull(a.entries[x]) - isFull(a.entries[y])) || x - y);
+  const order = a.entries.map((e, i) => i).sort((x, y) => (isFull(a.entries[x]) - isFull(a.entries[y])) || ((y === a.open) - (x === a.open)) || x - y);
   let shownDone = false;
   order.forEach(ei => {
     const en = a.entries[ei];
@@ -666,29 +667,34 @@ function exCoupon(en, ei, open) {
       ${s.pr ? '<span class="tagRed">рекорд</span>' : ''}<span class="dot ${s.tier}"></span><button class="x" data-act="delSet" data-a="${ei}" data-b="${i}" aria-label="Удалить подход">✕</button></div>`;
   });
   if (calib && en.calibDone) b += `<div class="doneRow"><span>${en.calibE1RM ? 'Сила зафиксирована: 1ПМ ≈ ' + fmtW(Math.round(en.calibE1RM)) + ' кг' : 'Зафиксировано'}</span></div>`;
-  if (!full) {
-    const tgt = E.targetTier(p, done);
-    const span = en.repMax - en.repMin;
-    let reps;
-    if (span <= 10) {
-      const lo = Math.max(1, en.repMin - 3), hi = en.repMax + 3;
-      reps = '<div class="repChips">';
-      for (let r = lo; r <= hi; r++) reps += `<button class="${r === d.r ? 'on' : r >= en.repMin && r <= en.repMax ? 'in' : ''}" data-act="setReps" data-a="${ei}" data-b="${r}">${r}</button>`;
-      reps += '</div>';
-    } else reps = stepperHTML(ei, 'r', d.r);
-    b += `<div class="inPanel">
-      <div class="inTitle">${calib ? 'Попытка ' + (done + 1) + ' · дойди до:' : 'Подход ' + (done + 1) + ' из ' + p.sets + ' · цель:'} <span class="dot ${tgt}"></span><span class="${tgt === 'r' ? 'fail' : ''}">${tgt === 'r' ? 'до отказа' : TIER[tgt].title.toLowerCase()}</span></div>
-      ${en.bw ? '' : '<div class="stpLbl">Вес, кг</div>' + stepperHTML(ei, 'w', d.w) + '<div style="height:10px"></div>'}
-      <div class="stpLbl">${en.bw && /\(сек\)/.test(en.name) ? 'Секунды' : 'Повторы'}</div>${reps}
-      <div class="rir">${['g', 'y', 'r'].map(k => `<button class="${k}${k === tgt ? ' tgt' : ''}${k === d.tier ? ' sel' : ''}" data-act="pickTier" data-a="${ei}" data-b="${k}"><b>${TIER[k].title}</b><span>${TIER[k].sub}</span></button>`).join('')}</div>
-      <button class="btn" style="margin-top:10px" data-act="logSet" data-a="${ei}" ${d.tier ? '' : 'disabled'}>${d.tier
-        ? `Записать: ${en.bw ? '' : fmtW(d.w) + ' кг × '}${d.r} · ${TIER[d.tier].title.toLowerCase()}`
-        : 'Выбери, как прошёл подход'}</button>
-      ${hintHTML(en)}</div>`;
+  if (!full && !calib) {
+    b += hintHTML(en);
   } else if (!calib) {
     b += `<div class="doneRow"><span>Готово ✓</span><button class="pill sm" data-act="extraSet" data-a="${ei}">Ещё подход ${ICON.plus}</button></div>`;
   }
   return `<div class="coupon" id="ex${ei}" style="--cc:${pastel(ei)}">${head}${b}</div>`;
+}
+// закреплённая панель ввода подхода над меню: не уезжает при прокрутке списка
+function dockHTML(en, ei) {
+  const p = en.plan, done = en.sets.length, d = en.draft, calib = p.mode === 'calib', tgt = E.targetTier(p, done);
+  const step = (k, v, unit) => `<div class="dStep"><button data-act="bump" data-a="${ei}" data-b="${k}" data-c="-1" aria-label="Меньше">−</button>
+    <label><input inputmode="decimal" value="${k === 'w' ? fmtW(v || 0) : v}" data-chg="draft" data-a="${ei}" data-b="${k}"><span>${unit}</span></label>
+    <button data-act="bump" data-a="${ei}" data-b="${k}" data-c="1" aria-label="Больше">+</button></div>`;
+  return `<div class="dockHead"><span class="grow"><b>${esc(en.name)}</b> · ${calib ? 'попытка ' + (done + 1) : 'подход ' + (done + 1) + ' из ' + p.sets}</span>
+      <span class="dot ${tgt}"></span><span class="${tgt === 'r' ? 'fail' : ''}">${tgt === 'r' ? 'до отказа' : TIER[tgt].title.toLowerCase()}</span></div>
+    <div class="dockRow">${en.bw ? '' : step('w', d.w, 'кг')}${step('r', d.r, /\(сек\)/.test(en.name) ? 'сек' : 'повт')}</div>
+    <div class="rir dockRir">${['g', 'y', 'r'].map(k => `<button class="${k}${k === tgt ? ' tgt' : ''}${k === d.tier ? ' sel' : ''}" data-act="pickTier" data-a="${ei}" data-b="${k}"><b>${TIER[k].title}</b></button>`).join('')}</div>
+    <button class="btn dockBtn" data-act="logSet" data-a="${ei}" ${d.tier ? '' : 'disabled'}>${d.tier
+      ? `Записать: ${en.bw ? '' : fmtW(d.w) + ' кг × '}${d.r} · ${TIER[d.tier].title.toLowerCase()}` : 'Выбери, как прошёл подход'}</button>`;
+}
+function renderDock() {
+  const a = S.active, dock = $('dock');
+  const en = a && S.ui.tab === 'home' && a.open >= 0 ? a.entries[a.open] : null;
+  const show = !!(en && en.sets.length < en.plan.sets);
+  dock.innerHTML = show ? dockHTML(en, a.open) : '';
+  dock.classList.toggle('show', show);
+  document.body.classList.toggle('docked', show);
+  document.documentElement.style.setProperty('--dockH', (show ? dock.offsetHeight : 0) + 'px');
 }
 function warmupHTML(en, ei) {
   const w = en.draft.w || en.plan.w;
@@ -1238,7 +1244,24 @@ function vHow() {
 }
 
 /* ---------- ШТОРКИ ---------- */
-function openSheet(html) { $('sheet').innerHTML = html; $('sheetwrap').classList.add('show'); $('sheet').scrollTop = 0; }
+function openSheet(html) { const sh = $('sheet'); sh.style.transform = ''; sh.innerHTML = html; $('sheetwrap').classList.add('show'); sh.scrollTop = 0; }
+// свайп вниз от верха шторки — закрыть
+(function sheetSwipe() {
+  const sh = $('sheet'); let y0 = null, dy = 0;
+  sh.addEventListener('touchstart', e => { if (sh.scrollTop > 0) { y0 = null; return; } y0 = e.touches[0].clientY; dy = 0; sh.style.transition = 'none'; }, { passive: true });
+  sh.addEventListener('touchmove', e => {
+    if (y0 == null) return;
+    dy = e.touches[0].clientY - y0;
+    if (dy > 0 && sh.scrollTop <= 0) sh.style.transform = `translateY(${dy}px)`; else if (dy < 0) { y0 = null; sh.style.transform = ''; }
+  }, { passive: true });
+  sh.addEventListener('touchend', () => {
+    if (y0 == null) return;
+    sh.style.transition = 'transform .2s ease';
+    if (dy > 90) { sh.style.transform = 'translateY(100%)'; setTimeout(() => { closeSheet(); sh.style.transform = ''; sh.style.transition = ''; }, 190); }
+    else sh.style.transform = '';
+    y0 = null;
+  });
+})();
 function closeSheet() { $('sheetwrap').classList.remove('show'); }
 let confirmCb = null, promptCb = null;
 function confirmSheet(msg, onYes, o = {}) {
@@ -1253,14 +1276,16 @@ function promptSheet(title, val, onOk) {
   setTimeout(() => { const el = $('promptIn'); if (el) { el.focus(); el.select(); } }, 60);
 }
 function openCycle() {
-  const c = S.cycle;
-  openSheet(`<h3>Мезоцикл ${c.meso}</h3>${weeksHTML()}
-    <p class="prose" style="margin:12px 4px">Сейчас: <b>${weekName(c.week)} · ${WEEKS[c.week].name}</b> — ${WEEKS[c.week].desc}.<br>Пройдено дней: ${days().map(d => (c.done.includes(d.id) ? '✓ ' : '○ ') + esc(d.name)).join(', ')}.</p>
-    <button class="btn ghost" data-act="cycleAction" data-a="close">Закрыть неделю сейчас</button>
-    ${c.week !== 4 ? '<button class="btn ghost" data-act="cycleAction" data-a="deload">Уйти на разгрузку</button>' : ''}
-    <button class="btn ghost" data-act="cycleAction" data-a="calib">Пройти подбор 1ПМ</button>
-    <button class="btn ghost" data-act="cycleAction" data-a="restart">Начать мезоцикл заново с недели 1</button>
-    <button class="btn" data-act="closeSheet" style="margin-top:10px">Закрыть</button>`);
+  const c = S.cycle, n = days().length, dn = c.done.filter(id => days().some(d => d.id === id)).length;
+  const row = (act, title, sub) => `<button class="li" style="width:100%;text-align:left" data-act="cycleAction" data-a="${act}"><span class="grow"><span class="liT">${title}</span><span class="liS">${sub}</span></span><span class="muted">›</span></button>`;
+  openSheet(`<h3>${c.week === 0 ? 'Подбор 1ПМ' : weekName(c.week) + ' · ' + WEEKS[c.week].name}</h3>
+    <p class="prose" style="margin:-4px 2px 14px">Мезоцикл ${c.meso} · пройдено ${dn} из ${n} дней. ${WEEKS[c.week].desc[0].toUpperCase() + WEEKS[c.week].desc.slice(1)}.</p>
+    <div class="card">
+      ${row('close', 'Закрыть неделю', 'если пропустил день — перейти к следующей')}
+      ${c.week !== 4 ? row('deload', 'Уйти на разгрузку', 'если накопилась усталость') : ''}
+      ${row('calib', 'Подбор 1ПМ', 'заново узнать силу — после перерыва')}
+      ${row('restart', 'Мезоцикл заново', 'вернуться к неделе 1')}
+    </div>`);
 }
 
 /* ---------- ТОСТ (с отменой) ---------- */

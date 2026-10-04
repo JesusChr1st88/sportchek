@@ -323,3 +323,23 @@ nav button.on svg{stroke-width:2.2}
 .groupsBox{list-style:none}
 .pArt:empty{display:none}
 .doneSep{font-size:13px;font-weight:600;color:var(--muted);margin:16px 2px 8px}
+
+/* ---------- закреплённая панель ввода подхода ---------- */
+#dock{position:fixed;left:0;right:0;bottom:calc(var(--navH) + env(safe-area-inset-bottom));z-index:35;display:none;
+  background:var(--bg);border-top:1px solid var(--line);padding:10px 16px 10px;max-width:640px;margin:0 auto}
+#dock.show{display:block}
+body.docked{padding-bottom:calc(var(--navH) + var(--dockH, 220px) + 24px + env(safe-area-inset-bottom))}
+body.docked #restbar{bottom:calc(var(--navH) + var(--dockH, 220px) + 8px + env(safe-area-inset-bottom))}
+.dockHead{display:flex;align-items:center;gap:6px;font-size:13.5px;color:var(--muted);margin-bottom:8px;white-space:nowrap;overflow:hidden}
+.dockHead .grow{overflow:hidden;text-overflow:ellipsis}
+.dockHead b{color:var(--ink);font-weight:600}
+.dockHead .fail{color:var(--tr);font-weight:600}
+.dockRow{display:flex;gap:8px}
+.dStep{flex:1;display:flex;align-items:center;background:var(--card);border-radius:12px;height:46px;min-width:0}
+.dStep button{width:42px;height:46px;font-size:22px;color:var(--ink2);flex:none}
+.dStep label{flex:1;min-width:0;display:flex;align-items:baseline;justify-content:center;gap:4px}
+.dStep input{width:100%;min-width:0;max-width:72px;text-align:right;background:none;border:none;font-size:20px;font-weight:600;outline:none;font-variant-numeric:tabular-nums}
+.dStep span{font-size:12px;color:var(--muted);flex:none;width:32px}
+.dockRir{margin-top:8px}
+.dockRir button{padding:9px 4px;background:var(--card)}
+.dockBtn{height:46px;margin-top:8px}
