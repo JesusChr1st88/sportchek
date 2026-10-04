@@ -355,7 +355,7 @@ function artFor(ex, w) {
 const localKey = d => { d = d instanceof Date ? d : new Date(d); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 const fmtDate = iso => new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
 const mmss = t => Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
-const restRange = ex => mmss(E.restFor(ex.rest, 'g', ex.heavy)) + '–' + mmss(E.restFor(ex.rest, 'r', ex.heavy));
+const restOf = tier => E.restFor(tier, S.settings.rest);
 const fmtRest = s => s >= 60 ? Math.floor(s / 60) + (s % 60 ? ':' + String(s % 60).padStart(2, '0') : '') + ' мин' : s + ' с';
 const tonnage = en => en.sets.reduce((a, s) => a + (s.w || 0) * (s.r || 0), 0);
 const repWord = ex => /\(сек\)/.test(ex.name) ? 'сек' : 'повт.';
@@ -364,7 +364,7 @@ const weekName = wk => wk === 4 ? 'Разгрузка' : 'Неделя ' + wk;
 const setsLine = en => en.sets.map(s => `${en.bw ? '' : fmtW(s.w) + '×'}${s.r} <span class="dot ${s.tier || 'g'}"></span>`).join('&nbsp; ');
 function findEx(key) { for (const d of days()) for (const ex of d.exercises) if (ex.key === key) return ex; return null; }
 function nextDayIndex() { const ds = days(); const i = ds.findIndex(d => !S.cycle.done.includes(d.id)); return i < 0 ? 0 : i; }
-function estMin(d) { return Math.round(d.exercises.reduce((a, ex) => a + E.phase(ex, S.cycle).sets * ((ex.rest || 90) + 40), 0) / 60); }
+function estMin(d) { return Math.round(d.exercises.reduce((a, ex) => a + E.phase(ex, S.cycle).sets * (restOf('y') + 40), 0) / 60); }
 function weekStreak() {
   if (!S.history.length) return 0;
   const wk = iso => { const d = new Date(iso); const dow = (d.getDay() + 6) % 7; d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - dow); return localKey(d); };
@@ -510,7 +510,7 @@ function exCoupon(en, ei, open) {
   const p = en.plan, done = en.sets.length, full = done >= p.sets;
   const dots = (p.tiers || []).map(t => `<span class="dot ${t}"></span>`).join('');
   const head = `<div class="exHead" data-act="toggleEx" data-a="${ei}"><div class="exName">${esc(en.name)}</div><span class="cnt num${full ? ' full' : ''}">${done}/${p.sets}</span></div>
-    <div class="exMeta">${p.sets} × ${en.repMin}–${en.repMax} ${repWord(en)} ${dots}${en.rest ? ' · отдых ' + restRange(en) : ''}</div>`;
+    <div class="exMeta">${p.sets} × ${en.repMin}–${en.repMax} ${repWord(en)} ${dots}</div>`;
   if (!open) {
     const chips = en.sets.map(s => `<span class="miniSet"><span class="dot ${s.tier}"></span>${en.bw ? '' : fmtW(s.w) + '×'}${s.r}</span>`).join('');
     return `<div class="coupon collapsed" id="ex${ei}" style="--cc:${pastel(ei)}">${head}${chips ? '<div class="miniSets">' + chips + '</div>' : ''}</div>`;
@@ -598,7 +598,7 @@ function logSet(ei, tier) {
     if (!e2) return;
     e2.sets.pop(); e2.draft.w = s.w; e2.draft.r = s.r; S.active.open = ei; restStop(); saveLocal(); render();
   });
-  if (en.rest) restStart(E.restFor(en.rest, tier, en.heavy), tier);
+  restStart(restOf(tier), tier);
 }
 function finishWorkout() {
   const a = S.active;
@@ -725,9 +725,8 @@ function openEditEx(sc, di, xi) {
     <div class="field"><label>Название</label><input type="text" value="${esc(ex.name)}" data-chg="exName" ${a}></div>
     <div class="two">${num('Подходы, старт (MEV)', 'sets', 1)}${num('Подходы, пик (MRV)', 'mrv', 1)}</div>
     <div class="two">${num('Повторы от', 'repMin', 1)}${num('Повторы до', 'repMax', 1)}</div>
-    <div class="two">${num('Шаг веса, кг', 'step', 0.5)}${num('Отдых после «средне», с', 'rest', 15)}</div>
+    ${num('Шаг веса, кг', 'step', 0.5)}
     ${num('Стартовый 1ПМ, кг (необязательно)', 'seedE1RM', 2.5)}
-    <p class="liS" style="margin:-4px 6px 12px">После «легко» отдых ×0,7, после отказа ×1,4 → сейчас ${restRange(ex)}</p>
     ${tog('Тяжёлое базовое', 'Растёт весом, не подходами; никогда не в отказ', 'heavy')}
     ${tog('На штанге', 'Показывать раскладку блинов', 'bar')}
     ${tog('Свой вес', 'Прогрессия по повторам, без кг', 'bw')}
@@ -1009,7 +1008,11 @@ function vData() {
     <div class="field"><label>Ключ (минимум 4 символа)</label><input type="password" id="cfgPass" style="background:var(--pill)"></div>
     <button class="btn" data-act="login">Войти</button></div>`;
   return `<div style="margin-top:10px">${sync}
-    <div class="card"><h2 class="mid" >Оборудование</h2><div class="row" style="margin-top:10px"><span class="grow">Вес грифа</span>
+    <div class="card"><h2 class="mid">Отдых между подходами</h2>
+      ${['g', 'y', 'r'].map(t => `<div class="row" style="margin-top:10px"><span class="grow row" style="gap:7px"><span class="dot ${t}"></span>После «${TIER[t].title.toLowerCase()}»</span>
+        <div class="stepper" style="width:170px"><button data-act="restSet" data-a="${t}" data-b="-10">−</button><input value="${mmss(restOf(t))}" readonly><button data-act="restSet" data-a="${t}" data-b="10">+</button></div></div>`).join('')}
+      <div style="height:12px"></div></div>
+    <div class="card"><h2 class="mid">Оборудование</h2><div class="row" style="margin-top:10px"><span class="grow">Вес грифа</span>
       <div class="stepper" style="width:170px"><button data-act="barBump" data-a="-2.5">−</button><input value="${fmtW(S.settings.bar)}" readonly><button data-act="barBump" data-a="2.5">+</button></div></div></div>
     <div class="card"><h2 class="mid" >Резервная копия</h2>
       <button class="btn ghost" style="margin-top:12px" data-act="export">Экспорт в файл</button>
@@ -1213,6 +1216,11 @@ const A = {
   },
 
   profTab: d => { S.ui.profTab = d.a; rerender(); },
+  restSet: d => {
+    const r = Object.assign({}, E.REST_DEFAULT, S.settings.rest || {});
+    r[d.a] = Math.max(20, Math.min(600, r[d.a] + (+d.b)));
+    S.settings.rest = r; save(); render();
+  },
   barBump: d => { S.settings.bar = Math.max(0, (S.settings.bar || 20) + (+d.a)); save(); render(); },
   syncNow: () => cloudSync(),
   login: async () => {

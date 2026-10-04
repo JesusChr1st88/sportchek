@@ -103,14 +103,12 @@ test('питание: формула и адаптивный расход', () =
   assert.ok(a && a.tdee > 2700 && a.tdee < 3000, JSON.stringify(a));
 });
 
-test('отдых зависит от сложности подхода', () => {
-  assert.equal(E.restFor(180, 'y', true), 180);
-  assert.equal(E.restFor(180, 'g', true), 120);   // 126 → 120
-  assert.equal(E.restFor(180, 'r', true), 255);   // 252 → 255
-  assert.equal(E.restFor(75, 'g', false), 60);    // 52,5 → 60
-  assert.equal(E.restFor(60, 'g', false), 45);    // не меньше 45 с
-  assert.ok(E.restFor(150, 'g', false) < E.restFor(150, 'y', false));
-  assert.ok(E.restFor(150, 'y', false) < E.restFor(150, 'r', false));
+test('отдых: стандарт по сложности подхода', () => {
+  assert.equal(E.restFor('g'), 80);
+  assert.equal(E.restFor('y'), 110);
+  assert.equal(E.restFor('r'), 150);
+  assert.equal(E.restFor('g', { g: 60 }), 60);
+  assert.equal(E.restFor('r', { g: 60 }), 150);
 });
 
 test('осевая нагрузка распознаётся', () => {
