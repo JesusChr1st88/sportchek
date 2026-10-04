@@ -285,3 +285,12 @@ nav button.on svg{stroke-width:2.2}
 #toast .msg{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:10px}
 #toast button{background:var(--inv);color:var(--ink);border-radius:8px;height:32px;padding:0 12px;font-size:13px;font-weight:600;flex:none}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ---------- разминка ---------- */
+.warmBox{margin-top:14px}
+.warmT{font-size:13px;font-weight:600;margin-bottom:8px}
+.warmT span{font-weight:400;color:var(--muted)}
+.warmN{font-size:13px;color:var(--muted)}
+.warmChips{display:flex;flex-wrap:wrap;gap:6px}
+.warmChip{height:36px;padding:0 12px;border-radius:10px;background:var(--field);font-size:14px;font-variant-numeric:tabular-nums;color:var(--ink2)}
+.warmChip.on{background:var(--pill);color:var(--muted);text-decoration:line-through}

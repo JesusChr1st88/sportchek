@@ -112,3 +112,23 @@ test('отдых зависит от сложности подхода', () => {
   assert.ok(E.restFor(150, 'g', false) < E.restFor(150, 'y', false));
   assert.ok(E.restFor(150, 'y', false) < E.restFor(150, 'r', false));
 });
+
+test('осевая нагрузка распознаётся', () => {
+  ['Приседания со штангой', 'Фронтальные приседания', 'Становая тяга', 'Румынская тяга', 'Тяга штанги в наклоне',
+   'Жим штанги стоя', 'Жим гантелей сидя', 'Подъёмы на носки', 'Выпады с гантелями'].forEach(n => assert.ok(E.isAxial(n), n));
+  ['Жим платформы ногами', 'Жим штанги лёжа', 'Подъёмы на носки сидя', 'Тяга с упором в грудь', 'Ягодичный мост со штангой']
+    .forEach(n => assert.ok(!E.isAxial(n), n));
+});
+
+test('разминка: ступени к рабочему весу', () => {
+  const heavy = E.warmupSets({ bar: true, heavy: true, step: 2.5, repMin: 5 }, 100, { bar: 20 });
+  assert.deepEqual(heavy.map(s => s.w), [20, 40, 60, 80]);
+  const comp = E.warmupSets({ step: 2, repMin: 8 }, 30);
+  assert.deepEqual(comp.map(s => s.w), [16, 22]);
+  assert.equal(E.warmupSets({ step: 1, repMin: 12 }, 10).length, 1);
+  assert.equal(E.warmupSets({ bar: true, heavy: true, step: 2.5, repMin: 5 }, 100, { deload: true }).length, 1);
+  assert.equal(E.warmupSets({ bar: true, heavy: true, step: 2.5, repMin: 5 }, 20, { bar: 20 }).length, 0);
+  assert.equal(E.warmupSets({ step: 2.5, repMin: 5 }, null).length, 0);
+  assert.ok(E.warmupSets({ bw: true, repMin: 12 }, 0)[0].r === 6);
+  heavy.forEach(s => assert.ok(s.w < 100));
+});

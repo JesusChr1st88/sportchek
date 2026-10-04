@@ -21,27 +21,50 @@ function mkEx(name, sets, repMin, repMax, step, rest, seed, flags = '', mrv) {
     bw: flags.includes('w'), heavy: flags.includes('h'), bar: flags.includes('b')
   };
 }
+// Замены для упражнений с осевой нагрузкой: [название, подходы, повт. от, до, шаг, отдых, 1ПМ, флаги]
+const SAFE = {
+  legPress: ['Жим платформы ногами', 3, 8, 12, 5, 150, 202],
+  legExt: ['Разгибания ног в тренажёре', 3, 10, 15, 2.5, 75],
+  legCurl: ['Сгибания ног', 3, 10, 12, 3, 75, 50],
+  hipThrust: ['Ягодичный мост со штангой', 3, 8, 12, 2.5, 150, null, 'b'],
+  chestRow: ['Тяга с упором в грудь', 3, 8, 12, 2.5, 120],
+  dbRow: ['Тяга гантели с упором в скамью', 3, 8, 12, 2, 90],
+  pullover: ['Пуловер на блоке', 3, 10, 15, 2.5, 75],
+  inclinePress: ['Жим гантелей на наклонной 45°', 3, 8, 12, 2, 120],
+  rearDelt: ['Разведения на заднюю дельту', 3, 12, 15, 2.5, 75],
+  calfSeated: ['Подъёмы на носки сидя', 3, 12, 15, 5, 60]
+};
+const S_ = k => mkEx(...SAFE[k]);
+// что на что менять (первый вариант, которого ещё нет в этом дне)
+const AXIAL_SUBS = [
+  [/фронтальн/, ['hipThrust', 'legExt', 'legPress']],
+  [/присед|выпад|гакк|хакк/, ['legPress', 'legExt', 'hipThrust']],
+  [/становая/, ['dbRow', 'chestRow', 'pullover']],
+  [/румынская|наклоны со штангой|good ?morning|гуд ?морнинг/, ['hipThrust', 'legCurl']],
+  [/тяга штанги в наклоне/, ['chestRow', 'dbRow']],
+  [/жим .*(стоя|сидя)|армейский/, ['inclinePress', 'rearDelt']],
+  [/носки/, ['calfSeated']],
+  [/шраги/, ['rearDelt']]
+];
 const TEMPLATES = {
   fullbody: () => [
     { id: uid(), name: 'Фулбоди 1', exercises: [
-      mkEx('Приседания со штангой', 3, 5, 8, 2.5, 210, null, 'hb'),
+      S_('legPress'),
       mkEx('Жим штанги лёжа', 3, 5, 8, 2.5, 180, 94, 'hb'),
       mkEx('Тяга вертикального блока', 3, 8, 10, 2.5, 120, 68),
       mkEx('Махи гантелями в стороны', 3, 12, 15, 1, 75, 11),
       mkEx('Разгибания рук на блоке', 3, 10, 12, 2.5, 75, 38),
       mkEx('Скручивания', 3, 12, 20, 0, 60, null, 'w')] },
     { id: uid(), name: 'Фулбоди 2', exercises: [
-      mkEx('Румынская тяга', 3, 6, 8, 2.5, 180, 110, 'hb'),
-      mkEx('Жим гантелей сидя', 3, 6, 10, 2, 150, 50),
+      S_('hipThrust'), S_('inclinePress'),
       mkEx('Тяга горизонтального блока', 3, 8, 12, 2.5, 120, 60),
-      mkEx('Жим платформы ногами', 3, 8, 12, 5, 150, 202),
+      S_('legExt'),
       mkEx('Подъём штанги на бицепс', 3, 8, 12, 2.5, 75, 28, 'b'),
-      mkEx('Подъёмы на носки', 3, 12, 15, 5, 60)] },
+      S_('calfSeated')] },
     { id: uid(), name: 'Фулбоди 3', exercises: [
-      mkEx('Фронтальные приседания', 3, 6, 8, 2.5, 180, null, 'hb'),
+      S_('legPress'),
       mkEx('Жим гантелей лёжа 30°', 3, 8, 12, 2, 150, 72),
-      mkEx('Тяга штанги в наклоне', 3, 6, 10, 2.5, 150, 86, 'hb'),
-      mkEx('Сгибания ног', 3, 10, 12, 3, 75, 50),
+      S_('chestRow'), S_('legCurl'),
       mkEx('Молот на бицепс', 3, 10, 12, 2, 75, 20),
       mkEx('Планка (сек)', 3, 20, 60, 0, 60, null, 'w')] }
   ],
@@ -49,26 +72,37 @@ const TEMPLATES = {
     { id: uid(), name: 'Грудь + трицепс + плечи', exercises: [
       mkEx('Жим штанги лёжа', 3, 5, 8, 2.5, 180, 94, 'hb'),
       mkEx('Жим гантелей лёжа 30°', 3, 8, 12, 2, 150, 72),
-      mkEx('Жим штанги стоя', 3, 6, 10, 2.5, 150, 45, 'hb'),
+      S_('inclinePress'),
       mkEx('Махи гантелями в стороны', 3, 12, 15, 1, 75, 11),
       mkEx('Разгибания рук на блоке', 3, 10, 12, 2.5, 75, 38),
       mkEx('Французский жим', 3, 10, 12, 2, 75, 25)] },
     { id: uid(), name: 'Спина + бицепс', exercises: [
-      mkEx('Становая тяга', 3, 4, 6, 2.5, 240, null, 'hb'),
-      mkEx('Тяга штанги в наклоне', 3, 6, 10, 2.5, 150, 86, 'hb'),
       mkEx('Тяга вертикального блока', 3, 8, 10, 2.5, 120, 68),
+      S_('chestRow'),
       mkEx('Тяга горизонтального блока', 3, 8, 12, 2.5, 120, 60),
+      S_('dbRow'),
       mkEx('Подъём штанги на бицепс', 3, 8, 12, 2.5, 75, 28, 'b'),
       mkEx('Молот на бицепс', 3, 10, 12, 2, 75, 20)] },
     { id: uid(), name: 'Ноги + плечи', exercises: [
-      mkEx('Приседания со штангой', 3, 5, 8, 2.5, 210, null, 'hb'),
-      mkEx('Жим платформы ногами', 3, 8, 12, 5, 150, 202),
-      mkEx('Румынская тяга', 3, 6, 8, 2.5, 180, 110, 'hb'),
-      mkEx('Сгибания ног', 3, 10, 12, 3, 75, 50),
-      mkEx('Жим гантелей сидя', 3, 6, 10, 2, 150, 50),
-      mkEx('Подъёмы на носки', 3, 12, 15, 5, 60)] }
+      S_('legPress'), S_('hipThrust'), S_('legExt'), S_('legCurl'), S_('rearDelt'), S_('calfSeated')] }
   ]
 };
+// Однократно убирает осевую нагрузку из всех наборов программ. Возвращает список замен.
+function stripAxial(P) {
+  const log = [];
+  Object.values(P.custom).forEach(ds => (ds || []).forEach(d => {
+    const out = [];
+    d.exercises.forEach(ex => {
+      if (!E.isAxial(ex.name)) { out.push(ex); return; }
+      const rule = AXIAL_SUBS.find(([re]) => re.test(normKey(ex.name)));
+      const pick = rule && rule[1].find(k => !d.exercises.concat(out).some(e => e.key === normKey(SAFE[k][0])));
+      if (pick) { const n = S_(pick); out.push(n); log.push(ex.name + ' → ' + n.name); }
+      else log.push(ex.name + ' → убрано');
+    });
+    d.exercises = out;
+  }));
+  return [...new Set(log)];
+}
 const HEAVY_NAMES = new Set(['Приседания со штангой', 'Жим штанги лёжа', 'Становая тяга', 'Жим штанги стоя', 'Фронтальные приседания', 'Румынская тяга', 'Тяга штанги в наклоне']);
 const BAR_RE = /штанг|становая|румынская тяга|фронтальные/i;
 
@@ -76,7 +110,7 @@ function defaultNutrition() { return { profile: null, log: {}, favs: [], weights
 function defaultState() {
   const fb = TEMPLATES.fullbody();
   return {
-    v: 3, ui: { tab: 'home' }, settings: { bar: 20 },
+    v: 3, ui: { tab: 'home' }, settings: { bar: 20, noAxial: true },
     program: { active: 'fullbody', custom: { fullbody: fb, split: TEMPLATES.split() }, days: fb },
     cycle: { meso: 1, week: 1, done: [], weekStartedAt: Date.now() },
     history: [], deleted: [], active: null, nutrition: defaultNutrition(), meta: { updatedAt: 0 }
@@ -144,6 +178,11 @@ function migrateState(st) {
       });
     } else st.active = null;
     st.v = 3;
+  }
+  if (!st.settings.noAxial) {
+    st.settings.noAxial = true;
+    const log = stripAxial(P);
+    if (log.length) st.ui.axialLog = log;
   }
   st.cycle = Object.assign({ meso: 1, week: 1, done: [], weekStartedAt: Date.now() }, st.cycle || {});
   // все дни уже отмечены, но неделя не закрыта (бывает после миграции со старого счёта «по 3 тренировки»)
@@ -481,11 +520,7 @@ function exCoupon(en, ei, open) {
   const price = en.bw ? `×${p.reps} ${repWord(en)}` : p.w != null ? `${fmtW(p.w)} кг <span class="pillSub">× ${p.reps}</span>` : 'подбери вес';
   let b = `<div class="exArt">${artFor(en, d.w || p.w, p.reps)}${en.bar && !en.bw && d.w ? `<div class="plCap">${platesCaption(d.w)}</div>` : ''}</div>
     <div class="pill">${old} ${price}</div><div class="note">${esc(p.note || '')}</div>`;
-  if (en.heavy && en.bar && !done && p.w && !p.deload) {
-    const bar = S.settings.bar || 20, ws = [];
-    [[0.4, 5], [0.6, 3], [0.8, 2]].forEach(([k, r]) => { const w = E.roundStep(Math.max(bar, p.w * k), en.step || 2.5); if (w < p.w && !ws.some(x => x[0] === w)) ws.push([w, r]); });
-    b += `<div class="warm">Разминка: гриф ×10 · ${ws.map(([w, r]) => fmtW(w) + '×' + r).join(' · ')}</div>`;
-  }
+  if (!done) b += warmupHTML(en, ei);
   b += '<div class="perf"><i></i><i></i></div>';
   en.sets.forEach((s, i) => {
     b += `<div class="setRow"><span class="n">${i + 1}</span><span class="v">${en.bw ? s.r + ' ' + repWord(en) : fmtW(s.w) + ' кг × ' + s.r}</span>
@@ -512,6 +547,17 @@ function exCoupon(en, ei, open) {
     b += `<div class="doneRow"><span>Готово ✓</span><button class="pill sm" data-act="extraSet" data-a="${ei}">Ещё подход ${ICON.plus}</button></div>`;
   }
   return `<div class="coupon" id="ex${ei}" style="--cc:${pastel(ei)}">${head}${b}</div>`;
+}
+function warmupHTML(en, ei) {
+  const w = en.draft.w || en.plan.w;
+  const ws = E.warmupSets(en, w, { bar: S.settings.bar || 20, deload: en.plan.deload });
+  if (!ws.length) {
+    if (!en.bw && !w) return '<div class="warmBox"><div class="warmT">Разминка</div><div class="warmN">2 лёгких подхода по 8–10, затем подбери рабочий вес</div></div>';
+    return '';
+  }
+  const done = en.warmDone || [];
+  const chips = ws.map((s, i) => `<button class="warmChip${done[i] ? ' on' : ''}" data-act="warmDone" data-a="${ei}" data-b="${i}">${en.bw ? '×' + s.r : (en.bar && s.w === (S.settings.bar || 20) ? 'гриф' : fmtW(s.w)) + ' × ' + s.r}</button>`).join('');
+  return `<div class="warmBox"><div class="warmT">Разминка <span>${done.filter(Boolean).length}/${ws.length} · на прогрессию не влияет</span></div><div class="warmChips">${chips}</div></div>`;
 }
 function stepperHTML(ei, k, v) {
   return `<div class="stepper"><button data-act="bump" data-a="${ei}" data-b="${k}" data-c="-1" aria-label="Меньше">−</button>
@@ -983,6 +1029,11 @@ function vHow() {
   ${s('Отказ', `<p>«Отказ» = больше ни одного повтора. <b>Тяжёлая база</b> (присед, становая, жимы штанги) в отказ <b>не уходит никогда</b>: риск и утомление выше пользы.</p>
     <p>У изоляции в отказ идёт <b>только последний подход пиковой недели</b>. Незапланированный отказ снижает вес следующего подхода и учитывается как признак перегруза.</p>
     <p>Две тренировки подряд с провалами в 2+ упражнениях → приложение предложит <b>разгрузку раньше</b>.</p>`, 'var(--p5)')}
+  ${s('Разминка', `<p>Перед первым рабочим подходом каждого упражнения — ступени к рабочему весу. Повторов мало, чтобы прогреть движение и не устать.</p>
+    <p><b>Тяжёлая база:</b> гриф ×10 → 40% ×8 → 60% ×5 → 80% ×3. <b>Многосуставные</b> (от ≤ 8 повт.): 50% ×8 → 75% ×4. <b>Изоляция:</b> 50% ×10. <b>Разгрузка:</b> один подход 50%.</p>
+    <p>Отмечай подходы тапом — после каждого запускается минута отдыха. На прогрессию и рекорды разминка не влияет.</p>`, 'var(--p3)')}
+  ${s('Без осевой нагрузки', `<p>Из программ убраны движения, где вес давит на позвоночник: приседы, становая и румынская тяги, тяга штанги в наклоне, жимы над головой, подъёмы на носки стоя.</p>
+    <p>Ноги — жим платформой, ягодичный мост, разгибания и сгибания в тренажёре. Спина — тяги с упором в грудь или скамью. Плечи — жим на наклонной 45°, махи и разведения.</p>`, 'var(--p2)')}
   ${s('Рекорды и плато', `<p>Рекорд — лучший <b>расчётный 1ПМ</b>: Эпли по «повторам до отказа» (сделано + запас). Первая тренировка упражнения — база, не рекорд.</p>
     <p>3 рабочие тренировки подряд без нового 1ПМ — <b>плато</b>: подсказка сбросить 10% и пройти заново.</p>
     <p>Каждый новый мезоцикл — +1 подход к стартовому объёму изолирующих (до ${E.MEV_CAP}); базовые растут весом.</p>`, 'var(--p4)')}
@@ -1060,6 +1111,12 @@ const A = {
   undo: () => { const u = toastUndo; toastUndo = null; $('toast').classList.remove('show'); if (u) u(); },
 
   startDay: d => startWorkout(d.a),
+  warmDone: d => {
+    const en = S.active.entries[+d.a]; en.warmDone = en.warmDone || [];
+    en.warmDone[+d.b] = !en.warmDone[+d.b];
+    rerender();
+    if (en.warmDone[+d.b]) restStart(60, null);
+  },
   toggleEx: d => { S.active.open = S.active.open === +d.a ? -1 : +d.a; rerender(); },
   setReps: d => { S.active.entries[+d.a].draft.r = +d.b; rerender(); },
   bump: d => {
@@ -1187,6 +1244,7 @@ const CHG = {
     ex.name = n;
     // ключ связывает упражнение с историей: меняем, только если истории ещё нет
     if (!E.entriesFor(S.history, ex.key, { limit: 1 }).length) ex.key = normKey(n);
+    if (E.isAxial(n)) toast('⚠ Осевая нагрузка на позвоночник — ты её исключил');
     save(); render();
   },
   progKey: (d, el) => { S.ui.progKey = el.value; rerender(); },
@@ -1215,6 +1273,12 @@ document.addEventListener('change', e => {
 /* ---------- старт ---------- */
 if (S.active) S.ui.tab = 'home';
 render();
+if (S.ui.axialLog) {
+  const log = S.ui.axialLog; delete S.ui.axialLog; save();
+  openSheet(`<h3>Без осевой нагрузки</h3><p class="prose" style="margin-bottom:12px">Упражнения, которые нагружают позвоночник сверху или в наклоне, заменены во всех программах. История по ним сохранена.</p>
+    <div class="card">${log.map(l => `<div class="li"><span class="liT">${esc(l)}</span></div>`).join('')}</div>
+    <button class="btn" data-act="closeSheet">Понятно</button>`);
+}
 cloudSync();
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => { });
 window.__S = () => S; // для отладки из консоли
