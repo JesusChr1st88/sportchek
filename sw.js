@@ -1,5 +1,5 @@
 // Офлайн для зала без связи: сеть первой (чтобы обновления приходили сразу), кэш — запасной вариант.
-const CACHE = 'progressia-v9';
+const CACHE = 'progressia-v10';
 const SHELL = ['./', 'index.html', 'css/app.css', 'js/app.js', 'js/engine.js', 'js/library.js', 'manifest.webmanifest', 'icon.svg'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener('activate', e => {

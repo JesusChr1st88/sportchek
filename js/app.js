@@ -12,8 +12,8 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const PASTELS = ['var(--p1)', 'var(--p2)', 'var(--p3)', 'var(--p4)', 'var(--p5)', 'var(--p6)'];
 const pastel = i => PASTELS[((i % 6) + 6) % 6];
-const WEEK_CC = { 1: 'var(--p1)', 2: 'var(--p2)', 3: 'var(--p5)', 4: 'var(--p6)' };
-const weekDot = wk => wk === 4 ? 'b' : wk === 1 ? 'g' : wk === 2 ? 'y' : 'r';
+const WEEK_CC = { 0: 'var(--p3)', 1: 'var(--p1)', 2: 'var(--p2)', 3: 'var(--p5)', 4: 'var(--p6)' };
+const weekDot = wk => wk === 0 || wk === 4 ? 'b' : wk === 1 ? 'g' : wk === 2 ? 'y' : 'r';
 
 function mkEx(name, sets, repMin, repMax, step, rest, seed, flags = '', mrv) {
   return {
@@ -426,7 +426,7 @@ const fmtRest = s => s >= 60 ? Math.floor(s / 60) + (s % 60 ? ':' + String(s % 6
 const tonnage = en => en.sets.reduce((a, s) => a + (s.w || 0) * (s.r || 0), 0);
 const repWord = ex => /\(сек\)/.test(ex.name) ? 'сек' : 'повт.';
 const plural = (n, a, b, c) => { const m = n % 10, h = n % 100; return m === 1 && h !== 11 ? a : m >= 2 && m <= 4 && (h < 12 || h > 14) ? b : c; };
-const weekName = wk => wk === 4 ? 'Разгрузка' : 'Неделя ' + wk;
+const weekName = wk => wk === 0 ? 'Подбор 1ПМ' : wk === 4 ? 'Разгрузка' : 'Неделя ' + wk;
 const setsLine = en => en.sets.map(s => `${en.bw ? '' : fmtW(s.w) + '×'}${s.r} <span class="dot ${s.tier || 'g'}"></span>`).join('&nbsp; ');
 function findEx(key) { for (const d of days()) for (const ex of d.exercises) if (ex.key === key) return ex; return null; }
 function nextDayIndex() { const ds = days(); const i = ds.findIndex(d => !S.cycle.done.includes(d.id)); return i < 0 ? 0 : i; }
@@ -457,7 +457,8 @@ function goalText(tiers) {
   const first = tiers[0], last = tiers[tiers.length - 1];
   return '· цель: ' + TIER[first].title.toLowerCase() + (last !== first ? ', последний — ' + TIER[last].title.toLowerCase() : '');
 }
-function estMin(d) { return Math.round(d.exercises.reduce((a, ex) => a + E.phase(ex, S.cycle).sets * (restOf('y') + 40), 0) / 60) + (cardioCfg().on ? cardioCfg().min : 0); }
+const setBudget = () => S.settings.setBudget ?? 28;
+function estMin(d) { return Math.round(Math.min(setBudget() || 99, d.exercises.reduce((a, ex) => a + E.phase(ex, S.cycle).sets, 0)) * (restOf('y') + 40) / 60) + (cardioCfg().on ? cardioCfg().min : 0); }
 function weekStreak() {
   if (!S.history.length) return 0;
   const wk = iso => { const d = new Date(iso); const dow = (d.getDay() + 6) % 7; d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - dow); return localKey(d); };
@@ -501,7 +502,7 @@ function render() {
 }
 function renderHeader() {
   const c = S.cycle;
-  $('hdTitle').innerHTML = `Мезоцикл ${c.meso} · ${c.week === 4 ? 'Разгрузка' : 'Неделя ' + c.week + ' · ' + WEEKS[c.week].name} ${ICON.chev}`;
+  $('hdTitle').innerHTML = `Мезоцикл ${c.meso} · ${c.week === 0 ? 'Подбор 1ПМ' : c.week === 4 ? 'Разгрузка' : 'Неделя ' + c.week + ' · ' + WEEKS[c.week].name} ${ICON.chev}`;
   if (S.active) $('hdSub').innerHTML = `${ICON.clock}<span id="elapsed">Тренировка идёт · ${elapsed()}</span>`;
   else {
     const n = days().length, d = S.cycle.done.filter(id => days().some(x => x.id === id)).length, st = weekStreak();
@@ -519,7 +520,10 @@ setInterval(() => { const el = $('elapsed'); if (el && S.active) el.textContent 
 /* ---------- ГЛАВНАЯ ---------- */
 function weeksHTML() {
   const c = S.cycle;
-  return '<div class="grid2">' + [1, 2, 3, 4].map(wk => {
+  const calib = c.week === 0 ? `<div class="wk cur" style="margin-bottom:8px"><div class="wkTitle">Подбор 1ПМ</div>
+    <div class="wkSub"><span class="dot b"></span>разведка силы · без отказа</div>
+    <div class="wkFoot">${days().map(d => `<span class="dd${c.done.includes(d.id) ? ' on' : ''}"></span>`).join('')}</div></div>` : '';
+  return calib + '<div class="grid2">' + [1, 2, 3, 4].map(wk => {
     const st = wk < c.week ? 'past' : wk === c.week ? 'cur' : '';
     const foot = wk === c.week ? days().map(d => `<span class="dd${c.done.includes(d.id) ? ' on' : ''}"></span>`).join('')
       : wk < c.week ? '✓ пройдена' : '';
@@ -543,6 +547,12 @@ function vHome() {
   });
   h += '</div></div>';
 
+  const lastW = S.history.length ? S.history[S.history.length - 1] : null;
+  const gap = lastW ? Math.floor((Date.now() - new Date(lastW.date)) / 864e5) : null;
+  if (S.cycle.week !== 0 && !S.active && (gap == null || gap >= 28)) h += `<div class="pad" style="margin-top:12px"><div class="coupon">
+    <div class="cTitle">${gap == null ? 'Сначала — подбор 1ПМ' : 'Перерыв ' + gap + ' дн. — начни с подбора 1ПМ'}</div>
+    <p class="cText">Неделя разведки: по каждому упражнению поднимаешь вес до «средне», приложение считает текущую силу. Дальше рабочие веса строятся от неё.</p>
+    <button class="btn" style="margin-top:12px" data-act="cycleAction" data-a="calib">Начать подбор 1ПМ</button></div></div>`;
   const f = E.fatigueSignal(S.history, S.cycle);
   if (f) h += `<div class="pad"><div class="coupon" style="--cc:var(--p5)"><div class="cTitle">Похоже на перегруз</div>
     <p class="cText">Две тренировки подряд с провалами (${f.downs} упр.)${f.fails ? ' и ' + f.fails + ' незапланированных отказов' : ''}. Разгрузка сейчас поможет восстановиться.</p>
@@ -570,6 +580,21 @@ function vHome() {
   return h;
 }
 /* ---------- АКТИВНАЯ ТРЕНИРОВКА ---------- */
+// планы на день: в неделю подбора — разведка, иначе рекомендация с лимитом подходов
+function planDay(day) {
+  const calib = S.cycle.week === 0;
+  const recs = day.exercises.map(ex => {
+    const r = rec(ex);
+    if (!calib) return { ex, r };
+    const reps = E.midReps(ex), est = r.e1rm;
+    const start = ex.bw ? 0 : est ? E.roundStep(E.weightFor(est, reps, 'y') * 0.7, ex.step) : null;
+    return { ex, r: { ...r, mode: 'calib', sets: 1, tiers: ['y'], tier: 'y', reps, w: start, prevW: null, deload: false,
+      note: ex.bw ? 'Один подход: максимум повторов с запасом 1–2' : start ? 'Начни с ~70% от прошлой оценки и поднимай, пока не станет «средне»' : 'Начни с лёгкого веса и поднимай, пока не станет «средне»' } };
+  });
+  if (calib) return recs;
+  const fit = E.fitBudget(recs.map(({ ex, r }) => ({ sets: r.sets, tiers: r.tiers, heavy: ex.heavy })), setBudget());
+  return recs.map((x, i) => ({ ex: x.ex, r: { ...x.r, sets: fit[i].sets, tiers: fit[i].tiers } }));
+}
 function startWorkout(dayId) {
   if (S.active) { setTab('home'); return; }
   const day = days().find(d => d.id === dayId);
@@ -577,8 +602,7 @@ function startWorkout(dayId) {
   if (!day.exercises.length) { toast('В этом дне нет упражнений'); return; }
   S.active = {
     dayId, dayName: day.name, startedAt: Date.now(), meso: S.cycle.meso, week: S.cycle.week, open: 0,
-    entries: day.exercises.map(ex => {
-      const r = rec(ex);
+    entries: planDay(day).map(({ ex, r }) => {
       return {
         exId: ex.id, key: ex.key, name: ex.name, group: ex.group, bw: ex.bw, bar: ex.bar, equip: equipOf(ex), heavy: ex.heavy, step: ex.step, rest: ex.rest,
         repMin: ex.repMin, repMax: ex.repMax, plan: r, sets: [], draft: { w: r.w || 0, r: r.reps || ex.repMin }
@@ -591,7 +615,7 @@ function startWorkout(dayId) {
 function vActive() {
   const a = S.active;
   const tot = a.entries.reduce((s, e) => s + e.plan.sets, 0), dn = a.entries.reduce((s, e) => s + Math.min(e.sets.length, e.plan.sets), 0);
-  let h = `<div class="pad" style="padding-top:14px"><div class="eyebrow"><span class="dot ${weekDot(a.week)}"></span>${weekName(a.week)} · ${WEEKS[a.week].name} · мезоцикл ${a.meso}</div>
+  let h = `<div class="pad" style="padding-top:14px"><div class="eyebrow"><span class="dot ${weekDot(a.week)}"></span>${a.week === 0 ? 'Подбор 1ПМ' : weekName(a.week) + ' · ' + WEEKS[a.week].name} · мезоцикл ${a.meso}</div>
     <h1 class="big" style="padding:6px 0 12px">${esc(a.dayName)}</h1>
     <div class="prog"><i style="width:${tot ? dn / tot * 100 : 0}%"></i></div>
     <div class="muted num" style="margin:8px 0 14px;font-size:14px">${dn} из ${tot} подходов</div>`;
@@ -605,8 +629,10 @@ function vActive() {
 function exCoupon(en, ei, open) {
   const p = en.plan, done = en.sets.length, full = done >= p.sets;
   const dots = goalText(p.tiers);
-  const head = `<div class="exHead" data-act="toggleEx" data-a="${ei}"><div class="exName">${esc(en.name)}</div><span class="cnt num${full ? ' full' : ''}">${done}/${p.sets}</span></div>
-    <div class="exMeta">${p.sets} × ${en.repMin}–${en.repMax} ${repWord(en)} ${dots}</div>`;
+  const calib = p.mode === 'calib';
+  const cnt = calib ? (en.calibDone ? (en.calibE1RM ? '✓ 1ПМ ≈ ' + fmtW(Math.round(en.calibE1RM)) : '✓') : 'подбор') : done + '/' + p.sets;
+  const head = `<div class="exHead" data-act="toggleEx" data-a="${ei}"><div class="exName">${esc(en.name)}</div><span class="cnt num${full ? ' full' : ''}">${cnt}</span></div>
+    <div class="exMeta">${calib ? `подбор · по ${p.reps} ${repWord(en)} до «средне», без отказа` : `${p.sets} × ${en.repMin}–${en.repMax} ${repWord(en)} ${dots}`}</div>`;
   if (!open) {
     const chips = en.sets.map(s => `<span class="miniSet"><span class="dot ${s.tier}"></span>${en.bw ? '' : fmtW(s.w) + '×'}${s.r}</span>`).join('');
     return `<div class="coupon collapsed" id="ex${ei}" style="--cc:${pastel(ei)}">${head}${chips ? '<div class="miniSets">' + chips + '</div>' : ''}</div>`;
@@ -618,12 +644,13 @@ function exCoupon(en, ei, open) {
   let b = `<div class="exArt">${art.svg}${art.cap ? `<div class="plCap">${art.cap}</div>` : ''}</div>
     <div class="pill">${old} ${price}</div><div class="note">${esc(p.note || '')}</div>`;
   b += `<div class="exActs"><button class="pill grey sm" data-act="exLater" data-a="${ei}">Позже</button>${done ? '' : `<button class="pill grey sm" data-act="exSwap" data-a="${ei}">Заменить</button>`}</div>`;
-  if (!done) b += warmupHTML(en, ei);
+  if (!done && !calib) b += warmupHTML(en, ei);
   b += '<div class="perf"><i></i><i></i></div>';
   en.sets.forEach((s, i) => {
     b += `<div class="setRow"><span class="n">${i + 1}</span><span class="v">${en.bw ? s.r + ' ' + repWord(en) : fmtW(s.w) + ' кг × ' + s.r}</span>
       ${s.pr ? '<span class="tagRed">рекорд</span>' : ''}<span class="dot ${s.tier}"></span><button class="x" data-act="delSet" data-a="${ei}" data-b="${i}" aria-label="Удалить подход">✕</button></div>`;
   });
+  if (calib && en.calibDone) b += `<div class="doneRow"><span>${en.calibE1RM ? 'Сила зафиксирована: 1ПМ ≈ ' + fmtW(Math.round(en.calibE1RM)) + ' кг' : 'Зафиксировано'}</span></div>`;
   if (!full) {
     const tgt = E.targetTier(p, done);
     const span = en.repMax - en.repMin;
@@ -635,7 +662,7 @@ function exCoupon(en, ei, open) {
       reps += '</div>';
     } else reps = stepperHTML(ei, 'r', d.r);
     b += `<div class="inPanel">
-      <div class="inTitle">Подход ${done + 1} из ${p.sets} · цель: <span class="dot ${tgt}"></span><span class="${tgt === 'r' ? 'fail' : ''}">${tgt === 'r' ? 'до отказа' : TIER[tgt].title.toLowerCase()}</span></div>
+      <div class="inTitle">${calib ? 'Попытка ' + (done + 1) + ' · дойди до:' : 'Подход ' + (done + 1) + ' из ' + p.sets + ' · цель:'} <span class="dot ${tgt}"></span><span class="${tgt === 'r' ? 'fail' : ''}">${tgt === 'r' ? 'до отказа' : TIER[tgt].title.toLowerCase()}</span></div>
       ${en.bw ? '' : '<div class="stpLbl">Вес, кг</div>' + stepperHTML(ei, 'w', d.w) + '<div style="height:10px"></div>'}
       <div class="stpLbl">${en.bw && /\(сек\)/.test(en.name) ? 'Секунды' : 'Повторы'}</div>${reps}
       <div class="rir">${['g', 'y', 'r'].map(k => `<button class="${k}${k === tgt ? ' tgt' : ''}${k === d.tier ? ' sel' : ''}" data-act="pickTier" data-a="${ei}" data-b="${k}"><b>${TIER[k].title}</b><span>${TIER[k].sub}</span></button>`).join('')}</div>
@@ -643,7 +670,7 @@ function exCoupon(en, ei, open) {
         ? `Записать: ${en.bw ? '' : fmtW(d.w) + ' кг × '}${d.r} · ${TIER[d.tier].title.toLowerCase()}`
         : 'Выбери, как прошёл подход'}</button>
       ${hintHTML(en)}</div>`;
-  } else {
+  } else if (!calib) {
     b += `<div class="doneRow"><span>Готово ✓</span><button class="pill sm" data-act="extraSet" data-a="${ei}">Ещё подход ${ICON.plus}</button></div>`;
   }
   return `<div class="coupon" id="ex${ei}" style="--cc:${pastel(ei)}">${head}${b}</div>`;
@@ -684,8 +711,14 @@ function logSet(ei) {
     if (v > prior + 0.01) s.pr = true;
   }
   en.sets.push(s);
-  const h = E.nextSetHint(en, s, en.sets.length - 1);
-  if (h) d.w = h.w;
+  if (en.plan.mode === 'calib') {
+    const c = E.calibStep(en, s, en.sets.length);
+    if (c.done) { en.calibDone = true; en.calibE1RM = c.e1rm; en.plan.sets = en.sets.length; }
+    else { en.plan.sets = en.sets.length + 1; d.w = c.nextW; en.plan.tiers = Array(en.plan.sets).fill('y'); }
+  } else {
+    const h = E.nextSetHint(en, s, en.sets.length - 1);
+    if (h) d.w = h.w;
+  }
   d.tier = null;
   let moved = false;
   if (en.sets.length >= en.plan.sets) {
@@ -698,15 +731,17 @@ function logSet(ei) {
   toast((s.pr ? '🏆 Рекорд! ' : '') + `${en.bw ? '' : fmtW(s.w) + '×'}${s.r} · ${TIER[tier].title.toLowerCase()}`, () => {
     const e2 = S.active && S.active.entries[ei];
     if (!e2) return;
-    e2.sets.pop(); e2.draft.w = s.w; e2.draft.r = s.r; e2.draft.tier = s.tier; S.active.open = ei; restStop(); saveLocal(); render();
+    e2.sets.pop(); e2.draft.w = s.w; e2.draft.r = s.r; e2.draft.tier = s.tier; S.active.open = ei;
+    if (e2.plan.mode === 'calib') { e2.calibDone = false; e2.calibE1RM = null; e2.plan.sets = e2.sets.length + 1; }
+    restStop(); saveLocal(); render();
   });
   restStart(restOf(tier), tier);
 }
 function finishWorkout() {
   const a = S.active;
   const entries = a.entries.filter(e => e.sets.length).map(e => {
-    const plan = { sets: e.plan.sets, tiers: e.plan.tiers, tier: e.plan.tier, repMin: e.repMin, repMax: e.repMax, w: e.plan.w, reps: e.plan.reps };
-    const j = E.judge(e.sets, plan, e.bw);
+    const plan = { sets: e.plan.sets, tiers: e.plan.tiers, tier: e.plan.tier, repMin: e.repMin, repMax: e.repMax, w: e.plan.w, reps: e.plan.reps, mode: e.plan.mode };
+    const j = e.plan.mode === 'calib' ? { outcome: 'calib', unplanned: 0 } : E.judge(e.sets, plan, e.bw);
     return { key: e.key, name: e.name, exId: e.exId, bw: e.bw, plan, outcome: j ? j.outcome : 'hold', unplanned: j ? j.unplanned : 0, sets: e.sets.map(s => ({ w: s.w, r: s.r, tier: s.tier })) };
   });
   if (!entries.length) {
@@ -1137,6 +1172,10 @@ function vData() {
     <div class="field"><label>Ключ (минимум 4 символа)</label><input type="password" id="cfgPass" style="background:var(--pill)"></div>
     <button class="btn" data-act="login">Войти</button></div>`;
   return `<div style="margin-top:10px">${sync}
+    <div class="card"><h2 class="mid">Объём тренировки</h2>
+      <div class="row" style="margin-top:10px"><span class="grow"><span class="liT">Рабочих подходов максимум</span><span class="liS">≈ ${Math.round(setBudget() * (restOf('y') + 40) / 60)} мин без кардио и разминки</span></span>
+        <div class="stepper" style="width:150px"><button data-act="budgetBump" data-a="-2">−</button><input value="${setBudget()}" readonly><button data-act="budgetBump" data-a="2">+</button></div></div>
+      <div style="height:12px"></div></div>
     <div class="card"><h2 class="mid">Кардио перед силовой</h2>
       <button class="toggleRow" style="background:var(--field);margin-top:10px" data-act="cardioOn"><span><span class="liT">Добавлять в каждую тренировку</span><span class="liS">лёгкий темп, разогрев перед весами</span></span><span class="switch${cardioCfg().on ? ' on' : ''}"></span></button>
       <div class="row"><span class="grow">Длительность, мин</span><div class="stepper" style="width:170px"><button data-act="cardioDef" data-a="-1">−</button><input value="${cardioCfg().min}" readonly><button data-act="cardioDef" data-a="1">+</button></div></div>
@@ -1160,10 +1199,13 @@ function vHow() {
   ${s('Недели цикла', `<p>Мезоцикл — <b>3 рабочие недели + разгрузка</b>. Неделя закрывается, когда пройдены <b>все дни</b> программы (а не «каждые 3 тренировки») — работает с любым числом дней.</p>
     <p><b>База</b> — минимальный объём (MEV), все подходы «легко». <b>Набор</b> — подходов больше, «средне». <b>Пик</b> — максимум (MRV), «средне». <b>Разгрузка</b> — половина подходов, −10% веса.</p>
     <p>Пропустил день — закрой неделю вручную в меню мезоцикла (нажми на заголовок сверху).</p>`, 'var(--p1)')}
-  ${s('Вес и повторы', `<p><b>Двойная прогрессия</b> по прошлой рабочей тренировке этого упражнения:</p>
-    <p>• все рабочие подходы на <b>верх диапазона</b> и не тяжелее цели → <b>+шаг веса</b>, повторы с низа;<br>• хоть один подход <b>ниже диапазона</b> или на 2 зоны тяжелее цели → <b>−шаг</b>;<br>• иначе — <b>тот же вес, +1 повтор</b>.</p>
-    <p>Разгрузка на прогрессию не влияет. После разгрузки вес пересчитывается из 1ПМ под «легко» — новый цикл стартует с запасом.</p>
-    <p>Внутри тренировки после каждого подхода вес следующего правится по факту: легко и сверх диапазона — добавь, тяжело или недобрал — сбавь.</p>`, 'var(--p2)')}
+  ${s('Подбор 1ПМ', `<p>Старт и возврат после перерыва — <b>неделя подбора</b>. По каждому упражнению: подходы на рабочие повторы (середина диапазона), вес растёт, пока подход не станет «средне» — 1–2 в запасе. Без отказа и без настоящего максимума — это безопасно после паузы.</p>
+    <p>«Легко» → приложение предлагает следующий вес (+8–20%). «Средне» или «отказ» → сила зафиксирована: <b>1ПМ = вес × (1 + (повторы + запас) / 30)</b>.</p>`, 'var(--p3)')}
+  ${s('Вес и повторы', `<p>Вес считается от <b>текущего 1ПМ</b> упражнения под целевые повторы (середина диапазона) и запас недели: легко = 3, средне = 1,5 повтора. Поэтому от недели к неделе цикла вес растёт сам, а после разгрузки новый цикл стартует легче.</p>
+    <p>1ПМ <b>сглаженный</b>: каждая тренировка сдвигает оценку наполовину к лучшему подходу. Один плохой день не обрушит веса, рост силы виден за 1–2 тренировки.</p>
+    <p>Ограничители: не больше <b>+5%</b> (минимум +1 шаг) за раз и не ниже −10%. Если шаг снаряда крупный (гантели) и вес не сдвинулся — <b>+1 повтор</b>, на верхней границе — следующая гантель.</p>
+    <p>Между подходами: легче цели при плановых повторах → +шаг, тяжелее на 2 зоны или недобор → −шаг.</p>`, 'var(--p2)')}
+  ${s('Объём', `<p>Подходы растут от недели к неделе цикла, но тренировка ограничена <b>${setBudget()} рабочими подходами</b> (меняется в «Данных»): сверх лимита срезается по подходу у упражнений с наибольшим объёмом, сначала не у базовых.</p>`, 'var(--p6)')}
   ${s('Отказ', `<p>«Отказ» = больше ни одного повтора. <b>Тяжёлая база</b> (присед, становая, жимы штанги) в отказ <b>не уходит никогда</b>: риск и утомление выше пользы.</p>
     <p>У изоляции в отказ идёт <b>только последний подход пиковой недели</b>. Незапланированный отказ снижает вес следующего подхода и учитывается как признак перегруза.</p>
     <p>Две тренировки подряд с провалами в 2+ упражнениях → приложение предложит <b>разгрузку раньше</b>.</p>`, 'var(--p5)')}
@@ -1201,6 +1243,7 @@ function openCycle() {
     <p class="prose" style="margin:12px 4px">Сейчас: <b>${weekName(c.week)} · ${WEEKS[c.week].name}</b> — ${WEEKS[c.week].desc}.<br>Пройдено дней: ${days().map(d => (c.done.includes(d.id) ? '✓ ' : '○ ') + esc(d.name)).join(', ')}.</p>
     <button class="btn ghost" data-act="cycleAction" data-a="close">Закрыть неделю сейчас</button>
     ${c.week !== 4 ? '<button class="btn ghost" data-act="cycleAction" data-a="deload">Уйти на разгрузку</button>' : ''}
+    <button class="btn ghost" data-act="cycleAction" data-a="calib">Пройти подбор 1ПМ</button>
     <button class="btn ghost" data-act="cycleAction" data-a="restart">Начать мезоцикл заново с недели 1</button>
     <button class="btn" data-act="closeSheet" style="margin-top:10px">Закрыть</button>`);
 }
@@ -1311,10 +1354,11 @@ const A = {
   restStop: () => restStop(),
 
   cycleAction: d => {
-    const txt = { close: 'Закрыть текущую неделю и перейти к следующей? Пропущенные дни останутся пропущенными.', deload: 'Перейти к разгрузке прямо сейчас? После неё начнётся новый мезоцикл.', restart: 'Вернуться к неделе 1 текущего мезоцикла?' }[d.a];
+    const txt = { close: 'Закрыть текущую неделю и перейти к следующей? Пропущенные дни останутся пропущенными.', deload: 'Перейти к разгрузке прямо сейчас? После неё начнётся новый мезоцикл.', restart: 'Вернуться к неделе 1 текущего мезоцикла?', calib: 'Начать неделю подбора 1ПМ? Каждый день программы — разведка силы по всем упражнениям. После неё начнётся неделя 1 с весами от новой оценки.' }[d.a];
     confirmSheet(txt, () => {
       if (d.a === 'close') advanceWeek();
       else if (d.a === 'deload') S.cycle = { ...S.cycle, week: 4, done: [], weekStartedAt: Date.now() };
+      else if (d.a === 'calib') S.cycle = { ...S.cycle, week: 0, done: [], weekStartedAt: Date.now() };
       else S.cycle = { ...S.cycle, week: 1, done: [], weekStartedAt: Date.now() };
       save(); render();
     }, { title: 'Мезоцикл', yes: 'Да' });
@@ -1409,6 +1453,7 @@ const A = {
   },
 
   profTab: d => { S.ui.profTab = d.a; rerender(); },
+  budgetBump: d => { S.settings.setBudget = Math.max(14, Math.min(44, setBudget() + (+d.a))); save(); render(); },
   restSet: d => {
     const r = Object.assign({}, E.REST_DEFAULT, S.settings.rest || {});
     r[d.a] = Math.max(20, Math.min(600, r[d.a] + (+d.b)));

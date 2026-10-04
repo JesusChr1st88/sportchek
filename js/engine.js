@@ -14,6 +14,7 @@ const rank = t => (TIER[t] ? TIER[t].rank : 0);
 
 /* ---------- мезоцикл: 3 рабочие недели + разгрузка ---------- */
 export const WEEKS = {
+  0: { name: 'Подбор 1ПМ', short: 'Подбор', desc: 'по каждому упражнению поднимаем вес до «средне» на рабочих повторах — так узнаём текущую силу' },
   1: { name: 'База',      short: 'Нед 1', desc: 'объём у минимума (MEV), все подходы — легко' },
   2: { name: 'Набор',     short: 'Нед 2', desc: 'подходов больше, все — средне' },
   3: { name: 'Пик',       short: 'Нед 3', desc: 'объём у максимума (MRV), средне; у изоляции последний подход — в отказ' },
@@ -26,9 +27,15 @@ export const STALL_SESSIONS = 3;
 /* ---------- базовая арифметика ---------- */
 // Эпли по «повторам до отказа» = сделано + запас. Работает на любом диапазоне повторов,
 // в отличие от RPE-таблицы, которая обрывается на 10 повторах.
-export function e1rm(w, r, tier) {
+// «Легко» при более тяжёлой цели — значит запас был больше обычного: считаем 4, а не 3,
+// иначе оценка 1ПМ застревает, когда человек делает ровно плановые повторы.
+export function rirFor(tier, target) {
+  if (tier === 'g' && target && target !== 'g') return 4;
+  return tier && TIER[tier] ? TIER[tier].rir : 0;
+}
+export function e1rm(w, r, tier, target) {
   if (!w || !r) return null;
-  const rtf = r + (tier && TIER[tier] ? TIER[tier].rir : 0);
+  const rtf = r + rirFor(tier, target);
   return rtf <= 1 ? w : w * (1 + rtf / 30);
 }
 export function weightFor(e, reps, tier) {
@@ -48,7 +55,7 @@ export function phase(ex, cyc) {
   const bonus = ex.heavy ? 0 : Math.max(0, Math.min(cyc.meso - 1, MEV_CAP - ex.sets));
   const mev = ex.sets + bonus;
   const mrv = Math.max(mev, Math.min((ex.mrv || ex.sets + 2) + bonus, MRV_CAP));
-  const wk = cyc.week;
+  const wk = cyc.week === 0 ? 1 : cyc.week; // неделя подбора считается как база
   let sets, tiers;
   if (wk === 4) {
     sets = Math.max(1, Math.round(mrv / 2));
@@ -142,7 +149,34 @@ export function stallInfo(history, key) {
   return { n: since, stalled: list.length > STALL_SESSIONS && since >= STALL_SESSIONS };
 }
 
-/* ---------- рекомендация на следующую сессию ---------- */
+/* ---------- текущий 1ПМ упражнения ----------
+   Сглаженная оценка: каждая рабочая сессия сдвигает её наполовину к своему лучшему
+   подходу. Один плохой или удачный день не бросает веса, но рост силы виден за 1–2
+   тренировки. Подбор 1ПМ (неделя 0) задаёт оценку заново — после перерыва старая
+   неактуальна. Разгрузки не учитываются.                                          */
+export const E1RM_ALPHA = 0.5;
+export function sessionE1RM(en, plan) {
+  let v = null;
+  en.sets.forEach((s, i) => { const x = e1rm(s.w, s.r, s.tier, targetTier(plan, i)); if (x && (v == null || x > v)) v = x; });
+  return v;
+}
+export function estimateE1RM(history, key) {
+  let est = null;
+  entriesFor(history, key, { skipDeload: true }).reverse().forEach(({ w, en }) => {
+    const v = sessionE1RM(en, planOf(en, w, null));
+    if (v == null) return;
+    est = est == null || w.week === 0 ? v : est * (1 - E1RM_ALPHA) + v * E1RM_ALPHA;
+  });
+  return est;
+}
+export const midReps = ex => Math.round((ex.repMin + ex.repMax) / 2);
+
+/* ---------- рекомендация на следующую сессию ----------
+   Вес = 1ПМ под целевые повторы (середина диапазона) и запас недели:
+   легко (3) → средне (1,5) — вес сам растёт от недели к неделе цикла, а после разгрузки
+   новый цикл стартует легче. Ограничители от шума: не больше +5% (минимум +1 шаг) за раз,
+   не ниже −10% (кроме разгрузки и начала цикла). Если шаг снаряда крупный и вес не
+   сдвинулся — прогрессия повторами (двойная прогрессия как запасной путь).            */
 export function recommend(ex, cyc, history) {
   const ph = phase(ex, cyc);
   const step = ex.step || 0;
@@ -159,50 +193,81 @@ export function recommend(ex, cyc, history) {
     return { ...base, w: 0, prevW: null, reps, prevReps: j.maxR, reason: ph.deload ? 'deload' : j.outcome, note };
   }
 
-  if (!hist.length) {
-    if (ex.seedE1RM) {
-      const w = roundStep(weightFor(ex.seedE1RM, ex.repMin, ph.tier) * (ph.deload ? 0.9 : 1), step);
-      return { ...base, w, prevW: null, reps: ex.repMin, reason: 'seed', note: 'Из стартового 1ПМ — первая тренировка уточнит' };
+  const est = estimateE1RM(history, ex.key) || ex.seedE1RM || null;
+  const reps0 = midReps(ex);
+  if (!est) return { ...base, w: null, prevW: null, reps: reps0, reason: 'calib', e1rm: null, note: 'Сила неизвестна — пройди подбор 1ПМ или начни с лёгкого' };
+
+  const last = hist[0];
+  const w0 = last ? Math.max(...last.en.sets.filter(x => x.r > 0).map(x => x.w || 0)) : null;
+  let w = weightFor(est, reps0, ph.tier) * (ph.deload ? 0.9 : 1);
+  let wr = roundStep(w, step), reps = reps0;
+  if (w0 && !ph.deload) {
+    const up = Math.max(w0 * 1.05, w0 + step);
+    while (wr > up + 1e-6 && step) wr = roundStep(wr - step, step);
+    if (!step && wr > up) wr = roundStep(up, 0);
+    if (cyc.week !== 1 && wr < Math.min(w0 * 0.9, w0 - step)) wr = roundStep(Math.min(w0 * 0.9, w0 - step), step);
+    if (wr === w0) {
+      // вес не сдвинулся: добавляем повтор, а на верхней границе — шаг веса
+      const j = judge(last.en.sets, planOf(last.en, last.w, ex), false);
+      if (j && j.outcome !== 'down') {
+        const nr = j.minR + 1;
+        if (nr > ex.repMax && step) { wr = w0 + step; reps = ex.repMin; } else reps = Math.max(reps0, Math.min(ex.repMax, nr));
+      }
     }
-    return { ...base, w: null, prevW: null, reps: ex.repMin, reason: 'calib', note: 'Вес неизвестен: начни с лёгкого, первый подход — разведка' };
   }
-
-  const last = hist[0], lastPlan = planOf(last.en, last.w, ex);
-  const j = judge(last.en.sets, lastPlan, false);
-  let w = j.w0, reps = ex.repMin, reason = j.outcome, note;
-
-  if (rank(ph.tier) < rank(targetTier(lastPlan, 0)) && !ph.deload) {
-    // новый мезоцикл после разгрузки: цель стала легче → вес от 1ПМ под «легко»
-    const mid = Math.round((ex.repMin + ex.repMax) / 2);
-    const e = topValue(last.en).v;
-    w = Math.min(j.w0, roundStep(weightFor(e, mid, ph.tier), step));
-    reps = mid; reason = 'reset';
-    note = 'Новый цикл: вес под «легко» по прошлому 1ПМ, дальше снова растём';
-  } else if (j.outcome === 'up') {
-    w = j.w0 + step; reps = ex.repMin;
-    note = 'Все подходы на верх диапазона — +' + fmtW(step) + ' кг';
-  } else if (j.outcome === 'down') {
-    w = Math.max(0, j.w0 - step); reps = ex.repMin;
-    note = 'Прошлый раз тяжелее плана — −' + fmtW(step) + ' кг';
-  } else {
-    reps = Math.min(ex.repMax, Math.max(ex.repMin, j.minR + 1));
-    note = 'Тот же вес — добиваем до ' + reps + ' повт.';
-  }
+  const reason = ph.deload ? 'deload' : !w0 ? 'seed' : wr > w0 ? 'up' : wr < w0 ? 'down' : 'hold';
+  let note = ph.deload ? 'Разгрузка: −10% веса и половина подходов'
+    : `1ПМ ≈ ${fmtW(Math.round(est))} кг → «${TIER[ph.tier].title.toLowerCase()}» на ${reps} повт.`;
   const st = stallInfo(history, ex.key);
-  if (st.stalled && reason !== 'up') note += ' · плато ' + st.n + ' трен.: сбрось 10% и пройди заново';
-  if (ph.deload) { w = w * 0.9; reps = ex.repMin; reason = 'deload'; note = 'Разгрузка: −10% веса и половина подходов'; }
-  return { ...base, w: roundStep(w, step), prevW: j.w0, reps, reason, note, stall: st.stalled };
+  if (st.stalled && !ph.deload) note += ' · плато ' + st.n + ' трен.: сбрось 10% и пройди заново';
+  return { ...base, w: wr, prevW: w0, reps, reason, note, e1rm: est, stall: st.stalled };
+}
+
+/* ---------- подбор 1ПМ ----------
+   Разведка без отказа: подходы на рабочие повторы, вес растёт, пока подход не станет
+   «средне» (1–2 в запасе). Тогда 1ПМ считается по нему. «Легко» → следующий вес из оценки
+   под «средне», но не меньше +1 шага и не больше +20%; первый скачок крупнее.        */
+export const CALIB_MAX = 6;
+export function calibStep(ex, s, attempt) {
+  if (ex.bw) return { done: true, e1rm: null };
+  const reps = midReps(ex), e = e1rm(s.w, s.r, s.tier, 'y'), step = ex.step || 1;
+  if (s.tier !== 'g' || attempt >= CALIB_MAX) return { done: true, e1rm: e };
+  let nx = weightFor(e, reps, 'y');
+  nx = Math.max(nx, s.w * (attempt <= 1 ? 1.15 : 1.08), s.w + step);
+  nx = Math.min(nx, s.w * 1.2 + step);
+  // вверх до шага: при разведке недобор хуже, чем лишние 1–2 кг
+  return { done: false, e1rm: e, nextW: ex.step ? Math.round(Math.ceil(nx / ex.step - 1e-9) * ex.step * 100) / 100 : Math.round(nx * 10) / 10 };
+}
+
+/* ---------- лимит рабочих подходов за тренировку ----------
+   Объём недели растёт, но тренировка не должна раздуваться: сверх лимита срезаем по
+   одному подходу у упражнений с наибольшим числом подходов (сначала не у базы), не ниже 2. */
+export function fitBudget(plans, budget) {
+  const out = plans.map(p => ({ ...p, tiers: [...(p.tiers || [])] }));
+  let total = out.reduce((a, p) => a + p.sets, 0);
+  while (budget && total > budget) {
+    let bi = -1;
+    out.forEach((p, i) => {
+      if (p.sets <= 2) return;
+      if (bi < 0 || p.sets > out[bi].sets || (p.sets === out[bi].sets && out[bi].heavy && !p.heavy)) bi = i;
+    });
+    if (bi < 0) break;
+    const p = out[bi], last = p.tiers[p.tiers.length - 1];
+    p.sets--; p.tiers = p.tiers.slice(0, p.sets);
+    if (last === 'r' && p.tiers.length) p.tiers[p.tiers.length - 1] = 'r';
+    total--;
+  }
+  return out;
 }
 
 /* ---------- подсказка на следующий подход внутри тренировки ---------- */
 export function nextSetHint(en, s, idx) {
   if (en.bw || !en.step || !s.w) return null;
   const tgt = targetTier(en.plan, idx);
-  const d = rank(s.tier) - rank(tgt);
+  const d = rank(s.tier) - rank(tgt), want = en.plan.reps || en.repMin;
   if (s.r < en.repMin || d >= 2) return { w: Math.max(0, s.w - en.step), dir: -1, note: 'тяжелее плана — сбавь' };
   if (tgt !== 'r' && s.tier === 'r') return { w: Math.max(0, s.w - en.step), dir: -1, note: 'незапланированный отказ — сбавь' };
-  if (d < 0 && s.r > en.repMax) return { w: s.w + en.step, dir: 1, note: 'легко и сверх диапазона — добавь' };
-  if (d <= -2 && s.r >= en.repMax) return { w: s.w + en.step, dir: 1, note: 'сильно легче цели — добавь' };
+  if (d < 0 && s.r >= want) return { w: s.w + en.step, dir: 1, note: 'легче цели — добавь' };
   return { w: s.w, dir: 0, note: 'в цели — держи вес' };
 }
 
@@ -211,7 +276,7 @@ export function nextSetHint(en, s, idx) {
    или ≥3 незапланированных отказа.                                                  */
 export function fatigueSignal(history, cyc) {
   if (cyc.week === 4) return null;
-  const recent = history.filter(w => w.meso === cyc.meso && !w.deload).slice(-2);
+  const recent = history.filter(w => w.meso === cyc.meso && !w.deload && w.week !== 0).slice(-2);
   if (recent.length < 2) return null;
   const score = recent.map(w => ({
     downs: w.entries.filter(e => e.outcome === 'down').length,

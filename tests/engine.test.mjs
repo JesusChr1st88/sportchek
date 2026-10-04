@@ -28,39 +28,12 @@ test('phase: рост MEV по мезоциклам с потолком, баз�
   assert.ok(E.phase(ex(), { meso: 9, week: 3 }).sets <= E.MRV_CAP);
 });
 
-test('двойная прогрессия: up / hold / down', () => {
-  const plan = { repMin: 5, repMax: 8, tier: 'g', tiers: ['g', 'g', 'g'] };
-  const up = [sess(1, [{ w: 80, r: 8, tier: 'g' }, { w: 80, r: 8, tier: 'g' }, { w: 80, r: 8, tier: 'g' }], plan)];
-  assert.equal(E.recommend(ex(), { meso: 1, week: 1 }, up).w, 82.5);
-  const hold = [sess(1, [{ w: 80, r: 7, tier: 'g' }, { w: 80, r: 6, tier: 'g' }], plan)];
-  const rh = E.recommend(ex(), { meso: 1, week: 1 }, hold);
-  assert.equal(rh.w, 80); assert.equal(rh.reps, 7);
-  const down = [sess(1, [{ w: 80, r: 4, tier: 'r' }], plan)];
-  assert.equal(E.recommend(ex(), { meso: 1, week: 1 }, down).w, 77.5);
-});
-
 test('запланированный отказ не считается провалом, незапланированный — считается', () => {
   const plan = { repMin: 5, repMax: 8, tiers: ['y', 'y', 'r'] };
   const ok = E.judge([{ w: 80, r: 8, tier: 'y' }, { w: 80, r: 8, tier: 'y' }, { w: 80, r: 8, tier: 'r' }], plan);
   assert.equal(ok.outcome, 'up'); assert.equal(ok.unplanned, 0);
   const bad = E.judge([{ w: 80, r: 6, tier: 'r' }, { w: 80, r: 6, tier: 'y' }], { repMin: 5, repMax: 8, tiers: ['g', 'g'] });
   assert.equal(bad.outcome, 'down'); assert.equal(bad.unplanned, 1);
-});
-
-test('разгрузка: −10% и её данные не влияют на прогрессию', () => {
-  const plan = { repMin: 5, repMax: 8, tiers: ['y', 'y'] };
-  const h = [sess(2, [{ w: 100, r: 6, tier: 'y' }, { w: 100, r: 6, tier: 'y' }], plan)];
-  const r = E.recommend(ex(), { meso: 1, week: 4 }, h);
-  assert.equal(r.w, 90); assert.equal(r.sets, 3);
-  h.push(sess(4, [{ w: 50, r: 5, tier: 'g' }], { repMin: 5, repMax: 8, tiers: ['g'] }));
-  assert.equal(E.recommend(ex(), { meso: 1, week: 2 }, h).w, 100);
-});
-
-test('новый мезоцикл: вес пересчитывается под «легко», не выше прошлого', () => {
-  const plan = { repMin: 5, repMax: 8, tiers: ['y', 'y', 'r'] };
-  const h = [sess(3, [{ w: 100, r: 8, tier: 'y' }, { w: 100, r: 8, tier: 'y' }, { w: 100, r: 9, tier: 'r' }], plan)];
-  const r = E.recommend(ex(), { meso: 2, week: 1 }, h);
-  assert.equal(r.reason, 'reset'); assert.ok(r.w <= 100 && r.w > 80, 'w=' + r.w);
 });
 
 test('рекорды: первая сессия — база, не рекорд', () => {
@@ -73,14 +46,6 @@ test('рекорды: первая сессия — база, не рекорд'
 test('e1rm работает на высоких повторах и с запасом', () => {
   assert.ok(E.e1rm(20, 15, 'g') > E.e1rm(20, 15, 'r'));
   assert.equal(E.e1rm(100, 1, 'r'), 100);
-});
-
-test('подсказка на подход', () => {
-  const en = { step: 2.5, repMin: 5, repMax: 8, plan: { tiers: ['y', 'y', 'y'] } };
-  assert.equal(E.nextSetHint(en, { w: 80, r: 10, tier: 'g' }, 0).w, 82.5);
-  assert.equal(E.nextSetHint(en, { w: 80, r: 4, tier: 'r' }, 0).w, 77.5);
-  assert.equal(E.nextSetHint(en, { w: 80, r: 6, tier: 'r' }, 0).dir, -1);
-  assert.equal(E.nextSetHint(en, { w: 80, r: 7, tier: 'y' }, 0).dir, 0);
 });
 
 test('сигнал перегруза', () => {
@@ -155,4 +120,86 @@ test('группа по названию', () => {
   assert.equal(L.guessGroup('Разгибания рук на блоке'), 'triceps');
   assert.equal(L.guessGroup('Подтягивания'), 'back');
   assert.equal(L.guessGroup('Тяга гантели к поясу'), 'back');
+});
+
+test('вес от 1ПМ: растёт с силой и с запасом недели, без скачков', () => {
+  const pg = { repMin: 5, repMax: 8, tiers: ['g', 'g', 'g'] };
+  const h = [sess(1, [{ w: 80, r: 8, tier: 'g' }, { w: 80, r: 8, tier: 'g' }, { w: 80, r: 8, tier: 'g' }], pg)];
+  const w1 = E.recommend(ex(), { meso: 1, week: 1 }, h), w2 = E.recommend(ex(), { meso: 1, week: 2 }, h);
+  assert.equal(w1.reps, 7);
+  assert.ok(w1.w >= 80 && w1.w <= 84, 'неделя 1: ' + w1.w);
+  assert.ok(w2.w > 80 && w2.w <= 84, 'неделя 2 тяжелее, но ≤ +5%: ' + w2.w);
+  assert.ok(w2.w >= w1.w);
+});
+
+test('провал снижает вес', () => {
+  const h = [sess(1, [{ w: 80, r: 4, tier: 'r' }], { repMin: 5, repMax: 8, tiers: ['g'] })];
+  assert.ok(E.recommend(ex(), { meso: 1, week: 1 }, h).w < 80);
+});
+
+test('разгрузка: −10%, её данные не влияют на оценку', () => {
+  const py = { repMin: 5, repMax: 8, tiers: ['y', 'y'] };
+  const h = [sess(2, [{ w: 100, r: 6, tier: 'y' }, { w: 100, r: 6, tier: 'y' }], py)];
+  const d = E.recommend(ex(), { meso: 1, week: 4 }, h);
+  assert.ok(d.w < 100 && d.w >= 80, 'разгрузка ' + d.w); assert.equal(d.sets, 3); assert.equal(d.reason, 'deload');
+  const before = E.estimateE1RM(h, 'жим');
+  h.push(sess(4, [{ w: 50, r: 5, tier: 'g' }], { repMin: 5, repMax: 8, tiers: ['g'] }));
+  assert.equal(E.estimateE1RM(h, 'жим'), before);
+});
+
+test('оценка 1ПМ сглажена, подбор её переписывает', () => {
+  const pg = { repMin: 5, repMax: 8, tiers: ['y'] };
+  const h = [sess(1, [{ w: 100, r: 6, tier: 'y' }], pg), sess(2, [{ w: 60, r: 6, tier: 'y' }], pg)];
+  const est = E.estimateE1RM(h, 'жим');
+  assert.ok(est > 60 * 1.25 && est < 100 * 1.25, 'один плохой день не роняет оценку вдвое');
+  h.push({ ...sess(0, [{ w: 70, r: 7, tier: 'y' }], pg), week: 0 });
+  assert.equal(Math.round(E.estimateE1RM(h, 'жим')), Math.round(E.e1rm(70, 7, 'y')));
+});
+
+test('крупный шаг снаряда: прогрессия повторами, на верхней границе — шагом', () => {
+  const d = ex({ key: 'махи', step: 2, repMin: 10, repMax: 12 });
+  const p = { repMin: 10, repMax: 12, tiers: ['g', 'g'] };
+  const s1 = [{ id: 'a', date: 'x', meso: 1, week: 1, entries: [{ key: 'махи', sets: [{ w: 10, r: 11, tier: 'g' }, { w: 10, r: 11, tier: 'g' }], plan: p }] }];
+  const r1 = E.recommend(d, { meso: 1, week: 1 }, s1);
+  assert.equal(r1.w, 10); assert.equal(r1.reps, 12);
+  const s2 = [{ id: 'b', date: 'x', meso: 1, week: 1, entries: [{ key: 'махи', sets: [{ w: 10, r: 12, tier: 'g' }, { w: 10, r: 12, tier: 'g' }], plan: p }] }];
+  assert.equal(E.recommend(d, { meso: 1, week: 1 }, s2).w, 12);
+});
+
+test('«легко» при цели «средне» не застревает: запас 4', () => {
+  assert.ok(E.e1rm(80, 7, 'g', 'y') > E.e1rm(80, 7, 'g', 'g'));
+});
+
+test('подсказка на подход', () => {
+  const en = { step: 2.5, repMin: 5, repMax: 8, plan: { tiers: ['y', 'y', 'y'], reps: 7 } };
+  assert.equal(E.nextSetHint(en, { w: 80, r: 7, tier: 'g' }, 0).w, 82.5);
+  assert.equal(E.nextSetHint(en, { w: 80, r: 4, tier: 'r' }, 0).w, 77.5);
+  assert.equal(E.nextSetHint(en, { w: 80, r: 7, tier: 'r' }, 0).dir, -1);
+  assert.equal(E.nextSetHint(en, { w: 80, r: 7, tier: 'y' }, 0).dir, 0);
+});
+
+test('подбор 1ПМ: растём до «средне», без отказа', () => {
+  const e = ex({ repMin: 5, repMax: 8, step: 2.5 });
+  const a1 = E.calibStep(e, { w: 40, r: 7, tier: 'g' }, 1);
+  assert.ok(!a1.done && a1.nextW >= 46 && a1.nextW <= 50.5, 'скачок ' + a1.nextW);
+  const a2 = E.calibStep(e, { w: 60, r: 7, tier: 'y' }, 3);
+  assert.ok(a2.done); assert.equal(Math.round(a2.e1rm), Math.round(60 * (1 + 8.5 / 30)));
+  assert.ok(E.calibStep(e, { w: 60, r: 7, tier: 'g' }, E.CALIB_MAX).done);
+  // после подбора рабочий вес недели 1 — под «легко»
+  const h = [{ id: 'c', date: 'x', meso: 1, week: 0, entries: [{ key: 'жим', sets: [{ w: 60, r: 7, tier: 'y' }], plan: { repMin: 5, repMax: 8, tiers: ['y'] } }] }];
+  const r = E.recommend(e, { meso: 1, week: 1 }, h);
+  assert.ok(r.w < 60 && r.w >= 52.5, 'неделя 1 после подбора: ' + r.w);
+});
+
+test('лимит подходов за тренировку', () => {
+  const plans = Array.from({ length: 7 }, (_, i) => ({ sets: 5, tiers: ['y', 'y', 'y', 'y', 'r'], heavy: i === 1 }));
+  const out = E.fitBudget(plans, 28);
+  assert.equal(out.reduce((a, p) => a + p.sets, 0), 28);
+  assert.ok(out.every(p => p.sets >= 2 && p.tiers.length === p.sets));
+  assert.ok(out.filter(p => !p.heavy).every(p => p.tiers[p.tiers.length - 1] === 'r'));
+  assert.equal(E.fitBudget(plans, 0)[0].sets, 5);
+});
+
+test('неделя подбора не даёт пиковый объём', () => {
+  assert.equal(E.phase(ex(), { meso: 1, week: 0 }).sets, 3);
 });
