@@ -116,6 +116,7 @@ function migrateState(st) {
       if (!ex.key) ex.key = normKey(ex.name);
       if (ex.heavy === undefined) ex.heavy = HEAVY_NAMES.has(ex.name);
       if (ex.bar === undefined) ex.bar = !ex.bw && BAR_RE.test(ex.name);
+      if (ex.bw && ex.bar) ex.bar = false;
       if (!ex.mrv) ex.mrv = ex.sets + 2;
     });
   }));
@@ -1097,7 +1098,13 @@ const A = {
   addEx: d => { const ex = mkEx('Новое упражнение', 3, 8, 12, 2.5, 120, null, ''); dsOf(d.a)[+d.b].exercises.push(ex); save(); render(); openEditEx(d.a, +d.b, dsOf(d.a)[+d.b].exercises.length - 1); },
   editEx: d => openEditEx(d.a, +d.b, +d.c),
   exNum: d => { const ex = exOf(d); setExNum(ex, d.d, (ex[d.d] || 0) + (+d.e)); afterExEdit(d); },
-  exToggle: d => { const ex = exOf(d); ex[d.d] = !ex[d.d]; if (d.d === 'bw' && ex.bw) ex.bar = false; afterExEdit(d); },
+  exToggle: d => {
+    const ex = exOf(d); ex[d.d] = !ex[d.d];
+    // «свой вес» и «на штанге» взаимоисключающие: у упражнения без кг нет раскладки блинов
+    if (d.d === 'bw' && ex.bw) ex.bar = false;
+    if (d.d === 'bar' && ex.bar) ex.bw = false;
+    afterExEdit(d);
+  },
   moveEx: d => {
     const a = dsOf(d.a)[+d.b].exercises, i = +d.c, j = i + (+d.d);
     if (j < 0 || j >= a.length) return;

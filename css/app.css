@@ -86,6 +86,7 @@ h2.mid{font-size:19px;font-weight:650;letter-spacing:-.02em;line-height:1.2}
 .btn.sm{height:40px;width:auto;padding:0 16px;font-size:14px}
 .btn:disabled{opacity:.3}
 .btn+.btn{margin-top:8px}
+.two>.btn+.btn{margin-top:0}
 .btn:active,.pill:active,.dayRow:active,.pcard:active,.prod:active,.chip:active,.rir button:active,.repChips button:active{opacity:.6}
 .tagRed,.tagGrey{display:inline-flex;align-items:center;border-radius:6px;padding:2px 7px;font-size:12px;font-weight:600;white-space:nowrap}
 .tagRed{background:var(--ink);color:var(--inv)}
