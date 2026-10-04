@@ -310,3 +310,15 @@ nav button.on svg{stroke-width:2.2}
 .coupon .btn.ghost,.card .btn.ghost{background:var(--field)}
 .exActs{display:flex;gap:6px;margin-top:12px}
 .exActs .pill{background:var(--field)}
+
+/* компактная тренировка */
+.coupon:not(.collapsed)>.pill{padding-top:8px}
+.exLinks{display:flex;gap:16px;margin-top:8px}
+.exLinks button{font-size:13.5px;font-weight:600;color:var(--ink2);padding:4px 0}
+.exArt{margin:10px 0 4px}
+.exArt svg{max-height:56px;width:auto}
+.cardioRow .pill{flex:none}
+.groupsBox summary{padding:12px 0}
+.groupsBox summary::-webkit-details-marker{display:none}
+.groupsBox{list-style:none}
+.pArt:empty{display:none}

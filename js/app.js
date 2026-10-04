@@ -18,7 +18,7 @@ const weekDot = wk => wk === 0 || wk === 4 ? 'b' : wk === 1 ? 'g' : wk === 2 ? '
 function mkEx(name, sets, repMin, repMax, step, rest, seed, flags = '', mrv) {
   return {
     id: uid(), key: normKey(name), name, sets, mrv: mrv || (flags.includes('h') ? sets + 1 : sets + 2),
-    repMin, repMax, step, rest, seedE1RM: seed || null,
+    repMin, repMax, step, rest, seedE1RM: null,
     bw: flags.includes('w'), heavy: flags.includes('h'), bar: flags.includes('b'),
     group: L.guessGroup(name),
     equip: flags.includes('w') ? 'bw' : flags.includes('b') ? 'barbell' : flags.includes('d') ? 'dumbbell' : flags.includes('p') ? 'plate' : flags.includes('m') ? 'stack' : undefined
@@ -183,6 +183,13 @@ function migrateState(st) {
     // если по фулбоди уже тренировались — сохраняем прежний состав отдельным набором
     if (P.active === 'fullbody' && st.history.length) P.custom.prev = old;
     if (P.active === 'fullbody') P.days = P.custom.fullbody;
+  }
+  if (!st.settings.seedsCleared) {
+    // стартовые 1ПМ из шаблонов старой версии — не данные пользователя
+    st.settings.seedsCleared = true;
+    const TPL_SEEDS = new Set([202, 94, 68, 11, 38, 110, 50, 60, 28, 72, 86, 20, 45, 25]);
+    Object.values(P.custom).forEach(ds => (ds || []).forEach(d => d.exercises.forEach(ex => { if (TPL_SEEDS.has(ex.seedE1RM)) ex.seedE1RM = null; })));
+    if (st.active) st.active.entries.forEach(en => { if (en.plan && en.plan.reason === 'seed' && !en.sets.length) en.plan = { ...en.plan, w: null, reason: 'calib', mode: 'calib', sets: 1, tiers: ['y'], tier: 'y' }; });
   }
   if (!st.settings.noAxial) {
     st.settings.noAxial = true;
@@ -442,9 +449,10 @@ function hrZone() {
 function cardioHTML() {
   const c = S.active.cardio;
   if (!c) return '';
-  if (c.done) return `<div class="coupon collapsed"><div class="exHead" data-act="cardioReopen"><div class="exName">Кардио-разминка</div><span class="cnt full">✓</span></div>
-    <div class="exMeta">${esc(c.type)} · ${c.min} мин</div></div>`;
-  return `<div class="coupon"><div class="exHead"><div class="exName">Кардио-разминка</div><button class="cnt" data-act="cardioSkip">пропустить</button></div>
+  if (c.done) return `<div class="coupon collapsed cardioRow"><div class="exHead" data-act="cardioReopen"><div class="exName">Кардио</div><span class="cnt full">✓ ${c.min} мин</span></div></div>`;
+  if (!c.open) return `<div class="coupon collapsed cardioRow"><div class="row"><button class="grow" style="text-align:left" data-act="cardioOpen"><span class="exName" style="display:block">Кардио · ${c.min} мин</span><span class="exMeta" style="display:block">${esc(c.type)} · лёгкий темп</span></button>
+    <button class="pill sm" data-act="cardioTimer">Таймер</button><button class="pill sm dark" data-act="cardioDone">✓</button></div></div>`;
+  return `<div class="coupon"><div class="exHead"><div class="exName" data-act="cardioOpen">Кардио · ${c.min} мин</div><button class="cnt" data-act="cardioSkip">пропустить</button></div>
     <div class="exMeta">лёгкий темп · ${hrZone()}</div>
     <div class="warmBox"><div class="eqPick">${CARDIO_TYPES.map(t => `<button class="chip${t === c.type ? ' on' : ''}" data-act="cardioType" data-a="${t}">${t}</button>`).join('')}</div></div>
     <div class="stpLbl" style="margin-top:14px">Минут</div>
@@ -585,7 +593,7 @@ function planDay(day) {
   const calib = S.cycle.week === 0;
   const recs = day.exercises.map(ex => {
     const r = rec(ex);
-    if (!calib) return { ex, r };
+    if (!calib && !(r.reason === 'calib' && !ex.bw)) return { ex, r };
     const reps = E.midReps(ex), est = r.e1rm;
     const start = ex.bw ? 0 : est ? E.roundStep(E.weightFor(est, reps, 'y') * 0.7, ex.step) : null;
     return { ex, r: { ...r, mode: 'calib', sets: 1, tiers: ['y'], tier: 'y', reps, w: start, prevW: null, deload: false,
@@ -593,7 +601,7 @@ function planDay(day) {
   });
   if (calib) return recs;
   const fit = E.fitBudget(recs.map(({ ex, r }) => ({ sets: r.sets, tiers: r.tiers, heavy: ex.heavy })), setBudget());
-  return recs.map((x, i) => ({ ex: x.ex, r: { ...x.r, sets: fit[i].sets, tiers: fit[i].tiers } }));
+  return recs.map((x, i) => x.r.mode === 'calib' ? x : ({ ex: x.ex, r: { ...x.r, sets: fit[i].sets, tiers: fit[i].tiers } }));
 }
 function startWorkout(dayId) {
   if (S.active) { setTab('home'); return; }
@@ -615,11 +623,8 @@ function startWorkout(dayId) {
 function vActive() {
   const a = S.active;
   const tot = a.entries.reduce((s, e) => s + e.plan.sets, 0), dn = a.entries.reduce((s, e) => s + Math.min(e.sets.length, e.plan.sets), 0);
-  let h = `<div class="pad" style="padding-top:14px"><div class="eyebrow"><span class="dot ${weekDot(a.week)}"></span>${a.week === 0 ? 'Подбор 1ПМ' : weekName(a.week) + ' · ' + WEEKS[a.week].name} · мезоцикл ${a.meso}</div>
-    <h1 class="big" style="padding:6px 0 12px">${esc(a.dayName)}</h1>
-    <div class="prog"><i style="width:${tot ? dn / tot * 100 : 0}%"></i></div>
-    <div class="muted num" style="margin:8px 0 14px;font-size:14px">${dn} из ${tot} подходов</div>`;
-  h += '<p class="muted" style="font-size:13px;margin:-4px 2px 12px">Порядок любой: открой нужное упражнение, а занятое отложи кнопкой «Позже».</p>';
+  let h = `<div class="pad" style="padding-top:8px"><div class="row" style="margin-bottom:8px"><h2 class="mid grow">${esc(a.dayName)}</h2><span class="muted num" style="font-size:14px">${dn}/${tot}</span></div>
+    <div class="prog" style="margin-bottom:12px"><i style="width:${tot ? dn / tot * 100 : 0}%"></i></div>`;
   h += cardioHTML();
   a.entries.forEach((en, ei) => { h += exCoupon(en, ei, ei === a.open); });
   h += `<button class="btn" data-act="finish">Завершить и зафиксировать</button>
@@ -633,6 +638,7 @@ function exCoupon(en, ei, open) {
   const cnt = calib ? (en.calibDone ? (en.calibE1RM ? '✓ 1ПМ ≈ ' + fmtW(Math.round(en.calibE1RM)) : '✓') : 'подбор') : done + '/' + p.sets;
   const head = `<div class="exHead" data-act="toggleEx" data-a="${ei}"><div class="exName">${esc(en.name)}</div><span class="cnt num${full ? ' full' : ''}">${cnt}</span></div>
     <div class="exMeta">${calib ? `подбор · по ${p.reps} ${repWord(en)} до «средне», без отказа` : `${p.sets} × ${en.repMin}–${en.repMax} ${repWord(en)} ${dots}`}</div>`;
+  const acts = `<div class="exLinks"><button data-act="exLater" data-a="${ei}">Позже</button>${en.sets.length ? '' : `<button data-act="exSwap" data-a="${ei}">Заменить</button>`}</div>`;
   if (!open) {
     const chips = en.sets.map(s => `<span class="miniSet"><span class="dot ${s.tier}"></span>${en.bw ? '' : fmtW(s.w) + '×'}${s.r}</span>`).join('');
     return `<div class="coupon collapsed" id="ex${ei}" style="--cc:${pastel(ei)}">${head}${chips ? '<div class="miniSets">' + chips + '</div>' : ''}</div>`;
@@ -641,9 +647,8 @@ function exCoupon(en, ei, open) {
   const old = !en.bw && p.prevW != null && p.prevW !== p.w ? `<s>${fmtW(p.prevW)}</s>` : '';
   const price = en.bw ? `×${p.reps} ${repWord(en)}` : p.w != null ? `${fmtW(p.w)} кг <span class="pillSub">× ${p.reps}</span>` : 'подбери вес';
   const art = equipArt(en, d.w || p.w, d.r || p.reps);
-  let b = `<div class="exArt">${art.svg}${art.cap ? `<div class="plCap">${art.cap}</div>` : ''}</div>
-    <div class="pill">${old} ${price}</div><div class="note">${esc(p.note || '')}</div>`;
-  b += `<div class="exActs"><button class="pill grey sm" data-act="exLater" data-a="${ei}">Позже</button>${done ? '' : `<button class="pill grey sm" data-act="exSwap" data-a="${ei}">Заменить</button>`}</div>`;
+  let b = `<div class="pill">${old} ${price}</div><div class="note">${esc(p.note || '')}</div>${acts}
+    <div class="exArt">${art.svg}${art.cap ? `<div class="plCap">${art.cap}</div>` : ''}</div>`;
   if (!done && !calib) b += warmupHTML(en, ei);
   b += '<div class="perf"><i></i><i></i></div>';
   en.sets.forEach((s, i) => {
@@ -837,35 +842,34 @@ function groupsCard(sc, ds) {
   const per = ds.length ? Math.round(ds.reduce((a, d) => a + d.exercises.length, 0) / ds.length) : 0;
   const rows = [...Object.keys(L.GROUPS), 'other'].filter(k => g[k]).map(k => `<div class="li"><span class="grow liT">${L.GROUPS[k] || 'Другое'}</span>
     <span class="liS num" style="margin:0">${g[k].n} упр. · ${g[k].s1}→${g[k].s3} подх./нед</span></div>`).join('');
-  return `<div class="card"><div class="row" style="padding-top:12px"><h2 class="mid grow">Группы мышц</h2><span class="muted" style="font-size:13px">~${per} упр. на тренировку</span></div>
+  return `<details class="card groupsBox"${S.ui.groupsOpen ? ' open' : ''}><summary class="row" data-act="groupsToggle"><h2 class="mid grow">Группы мышц</h2><span class="muted" style="font-size:13px">~${per} упр. на тренировку ›</span></summary>
     ${sc === 'fullbody' ? `<div class="row" style="margin:10px 0 4px"><span class="grow liS" style="margin:0">Упражнений на тренировку</span>
       ${[6, 7, 8].map(n => `<button class="chip${S.program.fbCount === n ? ' on' : ''}" style="background:${S.program.fbCount === n ? '' : 'var(--field)'}" data-act="fbCount" data-a="${n}">${n}</button>`).join('')}</div>` : ''}
-    ${rows}</div>`;
+    ${rows}</details>`;
 }
 function vProgram() {
   const sc = curScope(), ds = dsOf(sc), isAct = sc === S.program.active;
   const di = Math.min(S.ui.progDay || 0, Math.max(0, ds.length - 1));
-  const seg = segHTML(Object.keys(S.program.custom).map(k => [k, scopeLabel(k)]), sc, 'progScope');
-  let h = `<div class="pad" style="margin:10px 0 12px">${isAct
-    ? '<div class="eyebrow"><span class="dot r"></span>Активная программа — по ней идут недели цикла</div>'
-    : `<button class="btn" data-act="makeActive" data-a="${sc}">Сделать активной</button>`}</div>`;
-  h += '<div class="chips">' + ds.map((d, i) => `<button class="chip${i === di ? ' on' : ''}" data-act="progDay" data-a="${i}">${esc(d.name)}</button>`).join('')
+  const seg = segHTML(Object.keys(S.program.custom).map(k => [k, scopeLabel(k) + (k === S.program.active ? ' <span class="dot g" title="активная"></span>' : '')]), sc, 'progScope');
+  let h = '<div class="chips">' + ds.map((d, i) => `<button class="chip${i === di ? ' on' : ''}" data-act="progDay" data-a="${i}">${esc(d.name)}</button>`).join('')
+    + (ds.length ? `<button class="chip" data-act="renameDay" data-a="${sc}" data-b="${di}" aria-label="Переименовать день">✎</button>` : '')
     + `<button class="chip" data-act="addDay" data-a="${sc}">+ день</button></div>`;
   if (!ds.length) return { seg, body: h + '<div class="empty">Нет дней — добавь первый.</div>' };
-  h += groupsCard(sc, ds);
   const d = ds[di];
-  h += `<h1 class="big" style="padding-top:8px;display:flex;gap:10px;align-items:center" data-act="renameDay" data-a="${sc}" data-b="${di}">${esc(d.name)} <span class="muted">${ICON.edit}</span></h1><div class="pgrid">`;
+  h += '<div class="pgrid">';
   d.exercises.forEach((ex, xi) => {
     const r = rec(ex), ph = E.phase(ex, S.cycle);
-    const price = ex.bw ? `×${r.reps}` : r.w != null ? fmtW(r.w) + ' кг' : '—';
+    const price = ex.bw ? `×${r.reps}` : r.w != null ? fmtW(r.w) + ' кг' : 'подбор';
     h += `<button class="pcard" data-act="editEx" data-a="${sc}" data-b="${di}" data-c="${xi}">
       
-      <div class="pArt">${equipArt(ex, r.w || (ex.bw ? 0 : 40), r.reps).svg}</div><div class="prodName" style="margin:10px 0 6px">${esc(ex.name)}</div>
+      <div class="pArt">${equipArt(ex, r.w, r.reps).svg}</div><div class="prodName" style="margin:10px 0 6px">${esc(ex.name)}</div>
       <div class="prodMeta" style="margin:0 0 10px">${L.GROUPS[ex.group] || 'Другое'} · ${ex.repMin}–${ex.repMax}${ex.heavy ? ' · база' : ''}</div>
       <span class="pill">${price}</span></button>`;
   });
   h += `<button class="pcard add" data-act="addEx" data-a="${sc}" data-b="${di}">${ICON.plus}Упражнение</button></div>
-    <div class="pad" style="margin-top:16px">
+    <div style="height:12px"></div>${groupsCard(sc, ds)}
+    <div class="pad" style="margin-top:4px">
+      ${isAct ? '' : `<button class="btn" data-act="makeActive" data-a="${sc}">Сделать активной</button>`}
       <button class="btn ghost" data-act="delDay" data-a="${sc}" data-b="${di}">Удалить день</button>
       ${TEMPLATES[sc] ? `<button class="btn ghost" data-act="resetScope" data-a="${sc}">Сбросить «${scopeLabel(sc)}» к шаблону</button>` : (sc !== S.program.active ? `<button class="btn danger" data-act="delScope" data-a="${sc}">Удалить набор «${scopeLabel(sc)}»</button>` : '')}</div>`;
   return { seg, body: h };
@@ -1329,6 +1333,8 @@ const A = {
   cardioTimer: () => restStart(S.active.cardio.min * 60, null, 'cardio'),
   cardioDone: () => { S.active.cardio.done = true; if (restKind === 'cardio') restStop(); rerender(); },
   cardioSkip: () => { S.active.cardio = null; if (restKind === 'cardio') restStop(); rerender(); },
+  groupsToggle: (d, el, e) => { e.preventDefault(); S.ui.groupsOpen = !S.ui.groupsOpen; rerender(); },
+  cardioOpen: () => { S.active.cardio.open = !S.active.cardio.open; rerender(); },
   cardioReopen: () => { S.active.cardio.done = false; rerender(); },
   cardioOn: () => { S.settings.cardio = Object.assign(cardioCfg(), { on: !cardioCfg().on }); save(); render(); },
   cardioDef: d => { const c = cardioCfg(); c.min = Math.max(1, Math.min(60, c.min + (+d.a))); S.settings.cardio = c; save(); render(); },
