@@ -130,3 +130,29 @@ test('разминка: ступени к рабочему весу', () => {
   assert.ok(E.warmupSets({ bw: true, repMin: 12 }, 0)[0].r === 6);
   heavy.forEach(s => assert.ok(s.w < 100));
 });
+
+import * as L from '../js/library.js';
+test('библиотека: без осевой нагрузки, у всех есть группа', () => {
+  L.LIB.forEach(e => { assert.ok(!E.isAxial(e[0]), e[0]); assert.ok(L.GROUPS[e[1]], e[0]); });
+});
+test('фулбоди: 6/7/8 упражнений, крупные группы в каждом дне, без повторов внутри дня', () => {
+  [6, 7, 8].forEach(n => {
+    const plan = L.fullbodyPlan(n);
+    assert.equal(plan.length, 3);
+    plan.forEach(day => {
+      assert.equal(day.length, n);
+      assert.equal(new Set(day.map(e => e[0])).size, n);
+      ['quads', 'chest', 'back', 'post', 'delts'].forEach(g => assert.ok(day.some(e => e[1] === g), n + ' ' + g));
+    });
+    // в разные дни — разные упражнения на ту же группу
+    assert.notEqual(plan[0][0][0], plan[1][0][0]);
+  });
+  assert.equal(L.fullbodyPlan(7)[0].filter(e => e[7] === 'h').length, 1);
+});
+test('группа по названию', () => {
+  assert.equal(L.guessGroup('Сгибания ног'), 'post');
+  assert.equal(L.guessGroup('Разгибания ног в тренажёре'), 'quads');
+  assert.equal(L.guessGroup('Разгибания рук на блоке'), 'triceps');
+  assert.equal(L.guessGroup('Подтягивания'), 'back');
+  assert.equal(L.guessGroup('Тяга гантели к поясу'), 'back');
+});

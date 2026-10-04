@@ -1,4 +1,5 @@
 import * as E from './engine.js';
+import * as L from './library.js';
 const { TIER, WEEKS, fmtW, normKey } = E;
 
 /* =================================================================
@@ -19,6 +20,7 @@ function mkEx(name, sets, repMin, repMax, step, rest, seed, flags = '', mrv) {
     id: uid(), key: normKey(name), name, sets, mrv: mrv || (flags.includes('h') ? sets + 1 : sets + 2),
     repMin, repMax, step, rest, seedE1RM: seed || null,
     bw: flags.includes('w'), heavy: flags.includes('h'), bar: flags.includes('b'),
+    group: L.guessGroup(name),
     equip: flags.includes('w') ? 'bw' : flags.includes('b') ? 'barbell' : flags.includes('d') ? 'dumbbell' : flags.includes('p') ? 'plate' : flags.includes('m') ? 'stack' : undefined
   };
 }
@@ -36,6 +38,18 @@ const SAFE = {
   calfSeated: ['Подъёмы на носки сидя', 3, 12, 15, 5, 60, null, 'p']
 };
 const S_ = k => mkEx(...SAFE[k]);
+// упражнение из библиотеки: [название, группа, снаряд, от, до, шаг, 1ПМ, флаги]
+function fromLib(e) {
+  const ex = mkEx(e[0], 3, e[3], e[4], e[5], 90, e[6] || null, e[2] + (e[7] || ''));
+  ex.group = e[1];
+  return ex;
+}
+// дни фулбоди по числу упражнений; id дней переиспользуем, чтобы не сбить отметки недели
+function buildFullbody(count, oldDays) {
+  return L.fullbodyPlan(count).map((list, i) => ({
+    id: (oldDays && oldDays[i] && oldDays[i].id) || uid(), name: 'Фулбоди ' + (i + 1), exercises: list.map(fromLib)
+  }));
+}
 // что на что менять (первый вариант, которого ещё нет в этом дне)
 const AXIAL_SUBS = [
   [/фронтальн/, ['hipThrust', 'legExt', 'legPress']],
@@ -48,27 +62,7 @@ const AXIAL_SUBS = [
   [/шраги/, ['rearDelt']]
 ];
 const TEMPLATES = {
-  fullbody: () => [
-    { id: uid(), name: 'Фулбоди 1', exercises: [
-      S_('legPress'),
-      mkEx('Жим штанги лёжа', 3, 5, 8, 2.5, 180, 94, 'hb'),
-      mkEx('Тяга вертикального блока', 3, 8, 10, 2.5, 120, 68, 'm'),
-      mkEx('Махи гантелями в стороны', 3, 12, 15, 1, 75, 11, 'd'),
-      mkEx('Разгибания рук на блоке', 3, 10, 12, 2.5, 75, 38, 'm'),
-      mkEx('Скручивания', 3, 12, 20, 0, 60, null, 'w')] },
-    { id: uid(), name: 'Фулбоди 2', exercises: [
-      S_('hipThrust'), S_('inclinePress'),
-      mkEx('Тяга горизонтального блока', 3, 8, 12, 2.5, 120, 60, 'm'),
-      S_('legExt'),
-      mkEx('Подъём штанги на бицепс', 3, 8, 12, 2.5, 75, 28, 'b'),
-      S_('calfSeated')] },
-    { id: uid(), name: 'Фулбоди 3', exercises: [
-      S_('legPress'),
-      mkEx('Жим гантелей лёжа 30°', 3, 8, 12, 2, 150, 72, 'd'),
-      S_('chestRow'), S_('legCurl'),
-      mkEx('Молот на бицепс', 3, 10, 12, 2, 75, 20, 'd'),
-      mkEx('Планка (сек)', 3, 20, 60, 0, 60, null, 'w')] }
-  ],
+  fullbody: (count = 7) => buildFullbody(count),
   split: () => [
     { id: uid(), name: 'Грудь + трицепс + плечи', exercises: [
       mkEx('Жим штанги лёжа', 3, 5, 8, 2.5, 180, 94, 'hb'),
@@ -112,7 +106,7 @@ function defaultState() {
   const fb = TEMPLATES.fullbody();
   return {
     v: 3, ui: { tab: 'home' }, settings: { bar: 20, noAxial: true },
-    program: { active: 'fullbody', custom: { fullbody: fb, split: TEMPLATES.split() }, days: fb },
+    program: { active: 'fullbody', fbCount: 7, custom: { fullbody: fb, split: TEMPLATES.split() }, days: fb },
     cycle: { meso: 1, week: 1, done: [], weekStartedAt: Date.now() },
     history: [], deleted: [], active: null, nutrition: defaultNutrition(), meta: { updatedAt: 0 }
   };
@@ -153,6 +147,7 @@ function migrateState(st) {
       if (ex.bar === undefined) ex.bar = !ex.bw && BAR_RE.test(ex.name);
       if (ex.bw && ex.bar) ex.bar = false;
       if (!ex.equip) ex.equip = inferEquip(ex);
+      if (!ex.group) ex.group = L.guessGroup(ex.name);
       if (!ex.mrv) ex.mrv = ex.sets + 2;
     });
   }));
@@ -180,6 +175,14 @@ function migrateState(st) {
       });
     } else st.active = null;
     st.v = 3;
+  }
+  if (!P.fbCount) {
+    P.fbCount = 7;
+    const old = P.custom.fullbody;
+    P.custom.fullbody = buildFullbody(7, old);
+    // если по фулбоди уже тренировались — сохраняем прежний состав отдельным набором
+    if (P.active === 'fullbody' && st.history.length) P.custom.prev = old;
+    if (P.active === 'fullbody') P.days = P.custom.fullbody;
   }
   if (!st.settings.noAxial) {
     st.settings.noAxial = true;
@@ -577,7 +580,7 @@ function startWorkout(dayId) {
     entries: day.exercises.map(ex => {
       const r = rec(ex);
       return {
-        exId: ex.id, key: ex.key, name: ex.name, bw: ex.bw, bar: ex.bar, equip: equipOf(ex), heavy: ex.heavy, step: ex.step, rest: ex.rest,
+        exId: ex.id, key: ex.key, name: ex.name, group: ex.group, bw: ex.bw, bar: ex.bar, equip: equipOf(ex), heavy: ex.heavy, step: ex.step, rest: ex.rest,
         repMin: ex.repMin, repMax: ex.repMax, plan: r, sets: [], draft: { w: r.w || 0, r: r.reps || ex.repMin }
       };
     }),
@@ -592,6 +595,7 @@ function vActive() {
     <h1 class="big" style="padding:6px 0 12px">${esc(a.dayName)}</h1>
     <div class="prog"><i style="width:${tot ? dn / tot * 100 : 0}%"></i></div>
     <div class="muted num" style="margin:8px 0 14px;font-size:14px">${dn} из ${tot} подходов</div>`;
+  h += '<p class="muted" style="font-size:13px;margin:-4px 2px 12px">Порядок любой: открой нужное упражнение, а занятое отложи кнопкой «Позже».</p>';
   h += cardioHTML();
   a.entries.forEach((en, ei) => { h += exCoupon(en, ei, ei === a.open); });
   h += `<button class="btn" data-act="finish">Завершить и зафиксировать</button>
@@ -613,6 +617,7 @@ function exCoupon(en, ei, open) {
   const art = equipArt(en, d.w || p.w, d.r || p.reps);
   let b = `<div class="exArt">${art.svg}${art.cap ? `<div class="plCap">${art.cap}</div>` : ''}</div>
     <div class="pill">${old} ${price}</div><div class="note">${esc(p.note || '')}</div>`;
+  b += `<div class="exActs"><button class="pill grey sm" data-act="exLater" data-a="${ei}">Позже</button>${done ? '' : `<button class="pill grey sm" data-act="exSwap" data-a="${ei}">Заменить</button>`}</div>`;
   if (!done) b += warmupHTML(en, ei);
   b += '<div class="perf"><i></i><i></i></div>';
   en.sets.forEach((s, i) => {
@@ -784,9 +789,24 @@ function restTick() {
 function restStop() { clearInterval(restIv); $('restbar').classList.remove('show'); document.body.classList.remove('resting'); }
 
 /* ---------- ПРОГРАММА ---------- */
-const scopeLabel = k => ({ fullbody: 'Фулбоди', split: 'Сплит', mine: 'Моя' })[k] || k;
+const scopeLabel = k => ({ fullbody: 'Фулбоди', split: 'Сплит', mine: 'Моя', prev: 'Прошлая' })[k] || k;
 const dsOf = sc => S.program.custom[sc];
 function curScope() { const sc = S.ui.progScope; return sc && S.program.custom[sc] ? sc : S.program.active; }
+// сколько упражнений и подходов в неделю получает каждая группа: неделя 1 → пик (неделя 3)
+function groupsCard(sc, ds) {
+  const g = {};
+  ds.forEach(d => d.exercises.forEach(ex => {
+    const k = ex.group || 'other', r = (g[k] = g[k] || { n: 0, s1: 0, s3: 0 });
+    r.n++; r.s1 += E.phase(ex, { meso: S.cycle.meso, week: 1 }).sets; r.s3 += E.phase(ex, { meso: S.cycle.meso, week: 3 }).sets;
+  }));
+  const per = ds.length ? Math.round(ds.reduce((a, d) => a + d.exercises.length, 0) / ds.length) : 0;
+  const rows = [...Object.keys(L.GROUPS), 'other'].filter(k => g[k]).map(k => `<div class="li"><span class="grow liT">${L.GROUPS[k] || 'Другое'}</span>
+    <span class="liS num" style="margin:0">${g[k].n} упр. · ${g[k].s1}→${g[k].s3} подх./нед</span></div>`).join('');
+  return `<div class="card"><div class="row" style="padding-top:12px"><h2 class="mid grow">Группы мышц</h2><span class="muted" style="font-size:13px">~${per} упр. на тренировку</span></div>
+    ${sc === 'fullbody' ? `<div class="row" style="margin:10px 0 4px"><span class="grow liS" style="margin:0">Упражнений на тренировку</span>
+      ${[6, 7, 8].map(n => `<button class="chip${S.program.fbCount === n ? ' on' : ''}" style="background:${S.program.fbCount === n ? '' : 'var(--field)'}" data-act="fbCount" data-a="${n}">${n}</button>`).join('')}</div>` : ''}
+    ${rows}</div>`;
+}
 function vProgram() {
   const sc = curScope(), ds = dsOf(sc), isAct = sc === S.program.active;
   const di = Math.min(S.ui.progDay || 0, Math.max(0, ds.length - 1));
@@ -797,6 +817,7 @@ function vProgram() {
   h += '<div class="chips">' + ds.map((d, i) => `<button class="chip${i === di ? ' on' : ''}" data-act="progDay" data-a="${i}">${esc(d.name)}</button>`).join('')
     + `<button class="chip" data-act="addDay" data-a="${sc}">+ день</button></div>`;
   if (!ds.length) return { seg, body: h + '<div class="empty">Нет дней — добавь первый.</div>' };
+  h += groupsCard(sc, ds);
   const d = ds[di];
   h += `<h1 class="big" style="padding-top:8px;display:flex;gap:10px;align-items:center" data-act="renameDay" data-a="${sc}" data-b="${di}">${esc(d.name)} <span class="muted">${ICON.edit}</span></h1><div class="pgrid">`;
   d.exercises.forEach((ex, xi) => {
@@ -805,14 +826,21 @@ function vProgram() {
     h += `<button class="pcard" data-act="editEx" data-a="${sc}" data-b="${di}" data-c="${xi}">
       
       <div class="pArt">${equipArt(ex, r.w || (ex.bw ? 0 : 40), r.reps).svg}</div><div class="prodName" style="margin:10px 0 6px">${esc(ex.name)}</div>
-      <div class="prodMeta" style="margin:0 0 10px">${EQUIP[equipOf(ex)]} · ${ex.repMin}–${ex.repMax}${ex.heavy ? ' · база' : ''}</div>
+      <div class="prodMeta" style="margin:0 0 10px">${L.GROUPS[ex.group] || 'Другое'} · ${ex.repMin}–${ex.repMax}${ex.heavy ? ' · база' : ''}</div>
       <span class="pill">${price}</span></button>`;
   });
   h += `<button class="pcard add" data-act="addEx" data-a="${sc}" data-b="${di}">${ICON.plus}Упражнение</button></div>
     <div class="pad" style="margin-top:16px">
       <button class="btn ghost" data-act="delDay" data-a="${sc}" data-b="${di}">Удалить день</button>
-      ${TEMPLATES[sc] ? `<button class="btn ghost" data-act="resetScope" data-a="${sc}">Сбросить «${scopeLabel(sc)}» к шаблону</button>` : ''}</div>`;
+      ${TEMPLATES[sc] ? `<button class="btn ghost" data-act="resetScope" data-a="${sc}">Сбросить «${scopeLabel(sc)}» к шаблону</button>` : (sc !== S.program.active ? `<button class="btn danger" data-act="delScope" data-a="${sc}">Удалить набор «${scopeLabel(sc)}»</button>` : '')}</div>`;
   return { seg, body: h };
+}
+// другие упражнения библиотеки на ту же группу
+function altList(ex, attrs, title) {
+  const alts = L.libByGroup(ex.group).filter(e => normKey(e[0]) !== ex.key);
+  if (!alts.length) return '';
+  return `<div class="field"><label>${title || 'Заменить на упражнение той же группы'}</label><div class="card" style="margin:0;background:var(--card)">${alts.map(e =>
+    `<button class="li" style="width:100%;text-align:left" ${attrs} data-alt="${esc(e[0])}"><span class="grow"><span class="liT">${esc(e[0])}</span><span class="liS">${EQUIP[{ b: 'barbell', p: 'plate', m: 'stack', d: 'dumbbell', w: 'bw' }[e[2]]]} · ${e[3]}–${e[4]} повт.</span></span><span class="muted">›</span></button>`).join('')}</div></div>`;
 }
 function openEditEx(sc, di, xi) {
   const ex = dsOf(sc)[di].exercises[xi], a = `data-a="${sc}" data-b="${di}" data-c="${xi}"`;
@@ -828,6 +856,8 @@ function openEditEx(sc, di, xi) {
     ${num('Шаг веса, кг', 'step', 0.5)}
     ${num('Стартовый 1ПМ, кг (необязательно)', 'seedE1RM', 2.5)}
     ${tog('Тяжёлое базовое', 'Растёт весом, не подходами; никогда не в отказ', 'heavy')}
+    <div class="field"><label>Целевая группа</label><div class="eqPick">${Object.entries(L.GROUPS).map(([k, l]) => `<button class="chip${ex.group === k ? ' on' : ''}" data-act="exGroup" ${a} data-d="${k}">${l}</button>`).join('')}</div></div>
+    ${altList(ex, `data-act="exReplace" ${a}`)}
     <div class="field"><label>Снаряд</label><div class="eqPick">${Object.entries(EQUIP).map(([k, l]) => `<button class="chip${equipOf(ex) === k ? ' on' : ''}" data-act="exEquip" ${a} data-d="${k}">${l}</button>`).join('')}</div></div>
     <div class="two" style="margin:6px 0 10px"><button class="btn ghost" data-act="moveEx" ${a} data-d="-1">↑ Выше</button><button class="btn ghost" data-act="moveEx" ${a} data-d="1">↓ Ниже</button></div>
     <button class="btn danger" data-act="delEx" ${a}>Удалить упражнение</button>
@@ -1219,6 +1249,38 @@ const A = {
   undo: () => { const u = toastUndo; toastUndo = null; $('toast').classList.remove('show'); if (u) u(); },
 
   startDay: d => startWorkout(d.a),
+  exLater: d => {
+    const a = S.active, i = +d.a, [en] = a.entries.splice(i, 1);
+    a.entries.push(en);
+    const nx = a.entries.findIndex(e => e.sets.length < e.plan.sets);
+    a.open = nx >= 0 ? nx : a.entries.length - 1;
+    rerender(); toast(en.name + ' — в конец списка');
+    const el = $('ex' + a.open); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  },
+  exSwap: d => {
+    const en = S.active.entries[+d.a];
+    if (!en.group) en.group = L.guessGroup(en.name);
+    const html = altList(en, `data-act="swapPick" data-a="${d.a}"`, 'Чем заменить · ' + (L.GROUPS[en.group] || 'другое'));
+    openSheet(`<h3>Заменить</h3><p class="prose" style="margin-bottom:12px">${esc(en.name)} → упражнение на ту же группу. Вес подберётся по истории нового упражнения.</p>${html || '<div class="empty">Других упражнений на эту группу в библиотеке нет</div>'}<button class="btn ghost" data-act="closeSheet">Отмена</button>`);
+  },
+  swapPick: d => {
+    const alt = d.alt, ei = d.a;
+    openSheet(`<h3>${esc(alt)}</h3><p class="prose" style="margin-bottom:16px">Заменить только в этой тренировке или и в программе — тогда в следующий раз этот день будет уже с новым упражнением.</p>
+      <button class="btn" data-act="swapDo" data-a="${ei}" data-alt="${esc(alt)}" data-b="prog">И в программе</button>
+      <button class="btn ghost" data-act="swapDo" data-a="${ei}" data-alt="${esc(alt)}" data-b="once">Только сегодня</button>`);
+  },
+  swapDo: d => {
+    const a = S.active, i = +d.a, old = a.entries[i], e = L.libFind(d.alt);
+    if (!e) return;
+    const ex = fromLib(e), r = rec(ex);
+    a.entries[i] = { exId: ex.id, key: ex.key, name: ex.name, group: ex.group, bw: ex.bw, bar: ex.bar, equip: equipOf(ex), heavy: ex.heavy, step: ex.step,
+      repMin: ex.repMin, repMax: ex.repMax, plan: r, sets: [], draft: { w: r.w || 0, r: r.reps || ex.repMin } };
+    if (d.b === 'prog') {
+      const day = days().find(x => x.id === a.dayId), xi = day ? day.exercises.findIndex(x => x.id === old.exId) : -1;
+      if (xi >= 0) { const o = day.exercises[xi]; ex.id = o.id; ex.sets = o.sets; ex.mrv = o.mrv; day.exercises[xi] = ex; a.entries[i].exId = ex.id; save(); }
+    }
+    a.open = i; closeSheet(); rerender(); toast(old.name + ' → ' + ex.name);
+  },
   cardioType: d => { S.active.cardio.type = d.a; S.settings.cardio = Object.assign(cardioCfg(), { type: d.a }); save(); render(); },
   cardioMin: d => { const c = S.active.cardio; c.min = Math.max(1, Math.min(60, c.min + (+d.a))); rerender(); },
   cardioTimer: () => restStart(S.active.cardio.min * 60, null, 'cardio'),
@@ -1264,7 +1326,7 @@ const A = {
     S.program.active = d.a; S.cycle.done = []; save(); render();
   }, { title: 'Активная программа', yes: 'Сделать активной' }),
   resetScope: d => confirmSheet(`Сбросить «${scopeLabel(d.a)}» к шаблону? Изменения в упражнениях этого набора пропадут, история останется.`, () => {
-    S.program.custom[d.a] = TEMPLATES[d.a](); if (S.program.active === d.a) S.cycle.done = []; save(); render();
+    S.program.custom[d.a] = TEMPLATES[d.a](S.program.fbCount || 7); if (S.program.active === d.a) S.cycle.done = []; save(); render();
   }, { title: 'Сбросить?', yes: 'Сбросить', danger: true }),
   addDay: d => { const ds = dsOf(d.a); ds.push({ id: uid(), name: 'День ' + (ds.length + 1), exercises: [] }); S.ui.progDay = ds.length - 1; save(); render(); },
   delDay: d => { const ds = dsOf(d.a), day = ds[+d.b]; confirmSheet(`Удалить «${day.name}»? История сохранится.`, () => { ds.splice(+d.b, 1); S.cycle.done = S.cycle.done.filter(x => x !== day.id); S.ui.progDay = 0; save(); render(); }, { title: 'Удалить день?', yes: 'Удалить', danger: true }); },
@@ -1273,6 +1335,22 @@ const A = {
   editEx: d => openEditEx(d.a, +d.b, +d.c),
   exNum: d => { const ex = exOf(d); setExNum(ex, d.d, (ex[d.d] || 0) + (+d.e)); afterExEdit(d); },
   exEquip: d => { setEquip(exOf(d), d.d); afterExEdit(d); },
+  exGroup: d => { exOf(d).group = d.d; afterExEdit(d); },
+  exReplace: d => {
+    const day = dsOf(d.a)[+d.b], old = day.exercises[+d.c], e = L.libFind(d.alt);
+    if (!e) return;
+    const nx = fromLib(e); nx.id = old.id; nx.sets = old.sets; nx.mrv = old.mrv;
+    day.exercises[+d.c] = nx; save(); render(); openEditEx(d.a, +d.b, +d.c); toast(old.name + ' → ' + nx.name);
+  },
+  fbCount: d => {
+    const n = +d.a; if (n === S.program.fbCount) return;
+    confirmSheet(`Пересобрать дни фулбоди: ${n} упражнений на тренировку? Ручные изменения в фулбоди пропадут, история и прогресс по упражнениям сохранятся.`, () => {
+      S.program.fbCount = n; S.program.custom.fullbody = buildFullbody(n, S.program.custom.fullbody); save(); render();
+    }, { title: 'Структура фулбоди', yes: 'Пересобрать' });
+  },
+  delScope: d => confirmSheet(`Удалить набор «${scopeLabel(d.a)}»? История тренировок останется.`, () => {
+    delete S.program.custom[d.a]; S.ui.progScope = S.program.active; save(); render();
+  }, { title: 'Удалить набор?', yes: 'Удалить', danger: true }),
   exToggle: d => {
     const ex = exOf(d); ex[d.d] = !ex[d.d];
     // «свой вес» и «на штанге» взаимоисключающие: у упражнения без кг нет раскладки блинов

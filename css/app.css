@@ -308,3 +308,5 @@ nav button.on svg{stroke-width:2.2}
 .eqPick .chip{background:var(--field)}
 .eqPick .chip.on{background:var(--ink);color:var(--inv)}
 .coupon .btn.ghost,.card .btn.ghost{background:var(--field)}
+.exActs{display:flex;gap:6px;margin-top:12px}
+.exActs .pill{background:var(--field)}
